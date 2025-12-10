@@ -224,7 +224,7 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-ch
 
 ### Step 9.2: Validator Witnesses Agreement (adds validation attestation)
 ```bash
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n validator -c '{"function":"WitnessAgreementValidation","Args":["AGR001","CAMP001","VAL001","true","Agreement terms verified and compliant"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n validator -c '{"function":"WitnessAgreement","Args":["WITNESS001","AGR001","CAMP001","STARTUP001","INV001","27500","Agreement terms verified and compliant"]}'
 ```
 
 ---
@@ -250,21 +250,11 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID investor-
 
 ## 📋 PHASE 11: Startup Acknowledges Investment via Platform (common-channel)
 
-Platform receives funds from Investor and then notifies Startup on common-channel.
+Platform receives funds from Investor and Startup acknowledges receipt on common-channel.
 
-### Step 11.1: Platform Notifies Startup of Fund Receipt
-```bash
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"NotifyStartupFundReceived","Args":["NOTIFY001","CAMP001","INV001","STARTUP001","27500","USD","AGR001"]}'
-```
-
-### Step 11.2: Startup Acknowledges Investment Receipt
+### Step 11.1: Startup Acknowledges Investment Receipt
 ```bash
 peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n startup -c '{"function":"AcknowledgeInvestment","Args":["INV_001","CAMP001","INV001","27500"]}'
-```
-
-### Step 11.3: Platform Updates Campaign Funding Status
-```bash
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"UpdateCampaignFunding","Args":["CAMP001","27500","1"]}'
 ```
 
 ---
@@ -278,12 +268,12 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-v
 
 ### Step 12.2: Validator Verifies Milestone Completion
 ```bash
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-validator-channel -n validator -c '{"function":"VerifyMilestoneCompletion","Args":["VERIFY_MS001","CAMP001","MS001","AGR001","VALIDATOR001","true","8.5","Milestone verified - prototype meets all requirements","[\"prototype_demo.mp4\",\"test_results.pdf\"]"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-validator-channel -n validator -c '{"function":"VerifyMilestoneCompletion","Args":["VERIFY_MS001","MS001","CAMP001","STARTUP001","milestone_report_hash_123","true","8.5","Milestone verified - prototype meets all requirements","true"]}'
 ```
 
 ### Step 12.3: Query Milestone Verification Status
 ```bash
-peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-validator-channel -n validator -c '{"function":"GetMilestoneVerification","Args":["VERIFY_MS001"]}'
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-validator-channel -n validator -c '{"function":"GetValidation","Args":["VERIFY_MS001"]}'
 ```
 
 ---
@@ -305,9 +295,9 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-ch
 peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n startup -c '{"function":"ReceiveFunding","Args":["RELEASE001","CAMP001","MS001","8250","USD"]}'
 ```
 
-### Step 13.4: Query Fund Release Record
+### Step 13.4: Query Updated Campaign Status
 ```bash
-peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetFundRelease","Args":["RELEASE001"]}'
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetPublishedCampaign","Args":["CAMP001"]}'
 ```
 
 ---
@@ -321,7 +311,7 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-v
 
 ### Step 14.2: Validator Confirms Campaign Completion
 ```bash
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-validator-channel -n validator -c '{"function":"ConfirmCampaignCompletion","Args":["CAMP001","VAL001","All milestones verified and completed successfully"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n validator -c '{"function":"ConfirmCampaignCompletion","Args":["CONFIRM001","CAMP001","VAL001","true","All milestones verified and completed successfully"]}'
 ```
 
 ### Step 14.3: Platform Closes Campaign (common-channel)
@@ -382,8 +372,8 @@ peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-in
 
 ### Platform Queries
 ```bash
-# Get active campaigns
-peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-platform-channel -n platform -c '{"function":"GetActiveCampaigns","Args":[]}'
+# Get active campaigns (published campaigns are on common-channel)
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetActiveCampaigns","Args":[]}'
 
 # Get validator decision
 peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID validator-platform-channel -n platform -c '{"function":"GetValidatorDecision","Args":["CAMP001"]}'
