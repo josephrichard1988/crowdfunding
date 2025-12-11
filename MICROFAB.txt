@@ -1,0 +1,71 @@
+{
+  "port": 9090,
+  "endorsing_organizations": [
+    {
+      "name": "StartupOrg",
+      "peers": [
+        {
+          "name": "peer0",
+          "stateDatabase": "couchdb"
+        }
+      ]
+    },
+    {
+      "name": "ValidatorOrg",
+      "peers": [
+        {
+          "name": "peer0",
+          "stateDatabase": "couchdb"
+        }
+      ]
+    },
+    {
+      "name": "InvestorOrg",
+      "peers": [
+        {
+          "name": "peer0",
+          "stateDatabase": "couchdb"
+        }
+      ]
+    },
+    {
+      "name": "PlatformOrg",
+      "peers": [
+        {
+          "name": "peer0",
+          "stateDatabase": "couchdb"
+        }
+      ]
+    }
+  ],
+  "channels": [
+    {
+      "name": "startup-investor-channel",
+      "endorsing_organizations": ["StartupOrg", "InvestorOrg"]
+    },
+    {
+      "name": "startup-validator-channel",
+      "endorsing_organizations": ["StartupOrg", "ValidatorOrg"]
+    },
+    {
+      "name": "investor-validator-channel",
+      "endorsing_organizations": ["InvestorOrg", "ValidatorOrg"]
+    },
+    {
+      "name": "validator-platform-channel",
+      "endorsing_organizations": ["ValidatorOrg", "PlatformOrg"]
+    },
+    {
+      "name": "investor-platform-channel",
+      "endorsing_organizations": ["InvestorOrg", "PlatformOrg"]
+    },
+    {
+      "name": "startup-platform-channel",
+      "endorsing_organizations": ["StartupOrg", "PlatformOrg"]
+    },
+    {
+      "name": "common-channel",
+      "endorsing_organizations": ["StartupOrg", "ValidatorOrg", "InvestorOrg", "PlatformOrg"]
+    }
+  ]
+}
