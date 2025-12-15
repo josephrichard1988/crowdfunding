@@ -122,6 +122,69 @@ type AgreementWitness struct {
 	WitnessedAt       string  `json:"witnessedAt"`
 }
 
+// ============================================================================
+// DISPUTE INVESTIGATION STRUCTURES FOR VALIDATOR
+// ============================================================================
+
+// DisputeInvestigation represents validator's investigation of a dispute
+type DisputeInvestigation struct {
+	InvestigationID   string                `json:"investigationId"`
+	DisputeID         string                `json:"disputeId"`
+	ValidatorID       string                `json:"validatorId"`
+	DisputeType       string                `json:"disputeType"`
+	InitiatorID       string                `json:"initiatorId"`
+	InitiatorType     string                `json:"initiatorType"`
+	RespondentID      string                `json:"respondentId"`
+	RespondentType    string                `json:"respondentType"`
+	CampaignID        string                `json:"campaignId"`
+	Status            string                `json:"status"` // ASSIGNED, IN_PROGRESS, COMPLETED
+	Findings          []InvestigationFinding `json:"findings"`
+	EvidenceReviewed  []string              `json:"evidenceReviewed"`
+	TransactionLogs   []string              `json:"transactionLogs"`
+	Recommendation    string                `json:"recommendation"` // FAVOR_INITIATOR, FAVOR_RESPONDENT, PARTIAL, DISMISS
+	RecommendedPenalty string               `json:"recommendedPenalty"`
+	AssignedAt        string                `json:"assignedAt"`
+	CompletedAt       string                `json:"completedAt"`
+}
+
+// InvestigationFinding represents a finding during investigation
+type InvestigationFinding struct {
+	FindingID     string `json:"findingId"`
+	FindingType   string `json:"findingType"` // EVIDENCE_VERIFIED, EVIDENCE_INVALID, RULE_VIOLATION, POLICY_BREACH, FRAUD_DETECTED
+	Description   string `json:"description"`
+	Severity      string `json:"severity"` // LOW, MEDIUM, HIGH, CRITICAL
+	RelatedEvidence string `json:"relatedEvidence"` // IPFS hash
+	RecordedAt    string `json:"recordedAt"`
+}
+
+// ValidatorDisputeResponse represents validator's response when they are respondent
+type ValidatorDisputeResponse struct {
+	ResponseID      string   `json:"responseId"`
+	DisputeID       string   `json:"disputeId"`
+	ValidatorID     string   `json:"validatorId"`
+	ResponseText    string   `json:"responseText"`
+	Justification   string   `json:"justification"`
+	SupportingDocs  []string `json:"supportingDocs"` // IPFS hashes
+	RespondedAt     string   `json:"respondedAt"`
+}
+
+// MilestoneInvestigation for investigating milestone-related disputes
+type MilestoneInvestigation struct {
+	InvestigationID     string  `json:"investigationId"`
+	DisputeID           string  `json:"disputeId"`
+	MilestoneID         string  `json:"milestoneId"`
+	CampaignID          string  `json:"campaignId"`
+	ValidatorID         string  `json:"validatorId"`
+	MilestoneReviewed   bool    `json:"milestoneReviewed"`
+	DeliverableStatus   string  `json:"deliverableStatus"` // COMPLETED, PARTIAL, NOT_DELIVERED
+	QualityAssessment   float64 `json:"qualityAssessment"` // 0-100
+	TimelineAssessment  string  `json:"timelineAssessment"` // ON_TIME, DELAYED, SEVERELY_DELAYED
+	DelayJustified      bool    `json:"delayJustified"`
+	RecommendedAction   string  `json:"recommendedAction"` // RELEASE_FUNDS, PARTIAL_REFUND, FULL_REFUND
+	Comments            string  `json:"comments"`
+	InvestigatedAt      string  `json:"investigatedAt"`
+}
+
 // InitLedger initializes the ValidatorOrg ledger
 func (v *ValidatorContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	fmt.Println("ValidatorOrg contract initialized - Merged Version")
@@ -950,9 +1013,8 @@ func (v *ValidatorContract) PublishValidationProof(
 // ValidatorOrg can directly query the campaign data that StartupOrg wrote
 func (v *ValidatorContract) GetCampaign(ctx contractapi.TransactionContextInterface, campaignID string) (string, error) {
 	// Query the campaign directly from the shared ledger
-	// The key format must match what StartupOrg uses: "CAMPAIGN_" + campaignID
-	campaignKey := fmt.Sprintf("CAMPAIGN_%s", campaignID)
-	campaignJSON, err := ctx.GetStub().GetState(campaignKey)
+	// StartupOrg stores campaigns using just the campaignID as the key
+	campaignJSON, err := ctx.GetStub().GetState(campaignID)
 	if err != nil {
 		return "", fmt.Errorf("failed to read campaign: %v", err)
 	}
@@ -1153,9 +1215,10 @@ func (v *ValidatorContract) InvokeStartupOrgGetCampaign(
 		[]byte(campaignID),
 	}
 
-	// Cross-channel query to startuporg
+	// Cross-channel query to startup chaincode
+	// Note: chaincode name is "startup" as deployed, not "startuporg"
 	response := ctx.GetStub().InvokeChaincode(
-		"startuporg",
+		"startup",
 		args,
 		"startup-validator-channel",
 	)
@@ -1188,8 +1251,9 @@ func (v *ValidatorContract) InvokePlatformOrgRecordDecision(
 		[]byte(reportHash),
 	}
 
+	// Note: chaincode name is "platform" as deployed, not "platformorg"
 	response := ctx.GetStub().InvokeChaincode(
-		"platformorg",
+		"platform",
 		args,
 		"validator-platform-channel",
 	)
@@ -1232,8 +1296,9 @@ func (v *ValidatorContract) InvokeInvestorOrgShareRisk(
 		[]byte(recommendation),
 	}
 
+	// Note: chaincode name is "investor" as deployed, not "investororg"
 	response := ctx.GetStub().InvokeChaincode(
-		"investororg",
+		"investor",
 		args,
 		"investor-validator-channel",
 	)
@@ -1249,6 +1314,301 @@ func (v *ValidatorContract) InvokeInvestorOrgShareRisk(
 func generateHash(data string) string {
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:])
+}
+
+// ============================================================================
+// DISPUTE INVESTIGATION FUNCTIONS FOR VALIDATOR
+// ============================================================================
+
+// AcceptDisputeInvestigation accepts assignment to investigate a dispute
+func (v *ValidatorContract) AcceptDisputeInvestigation(
+	ctx contractapi.TransactionContextInterface,
+	investigationID string,
+	disputeID string,
+	validatorID string,
+	disputeType string,
+	initiatorID string,
+	initiatorType string,
+	respondentID string,
+	respondentType string,
+	campaignID string,
+) (string, error) {
+	now := time.Now().Format(time.RFC3339)
+
+	investigation := DisputeInvestigation{
+		InvestigationID: investigationID,
+		DisputeID:       disputeID,
+		ValidatorID:     validatorID,
+		DisputeType:     disputeType,
+		InitiatorID:     initiatorID,
+		InitiatorType:   initiatorType,
+		RespondentID:    respondentID,
+		RespondentType:  respondentType,
+		CampaignID:      campaignID,
+		Status:          "ASSIGNED",
+		Findings:        []InvestigationFinding{},
+		EvidenceReviewed: []string{},
+		TransactionLogs: []string{},
+		AssignedAt:      now,
+	}
+
+	investigationKey := fmt.Sprintf("DISPUTE_INVESTIGATION_%s", investigationID)
+	investigationJSON, _ := json.Marshal(investigation)
+	ctx.GetStub().PutState(investigationKey, investigationJSON)
+
+	// Emit event
+	eventPayload := map[string]interface{}{
+		"investigationId": investigationID,
+		"disputeId":       disputeID,
+		"validatorId":     validatorID,
+		"status":          "ASSIGNED",
+		"action":          "INVESTIGATION_ACCEPTED",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("InvestigationAccepted", eventJSON)
+
+	response := map[string]interface{}{
+		"message":         "Investigation assignment accepted",
+		"investigationId": investigationID,
+		"disputeId":       disputeID,
+		"status":          "ASSIGNED",
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// RecordInvestigationFinding records a finding during investigation
+func (v *ValidatorContract) RecordInvestigationFinding(
+	ctx contractapi.TransactionContextInterface,
+	investigationID string,
+	findingID string,
+	findingType string,
+	description string,
+	severity string,
+	relatedEvidence string,
+) (string, error) {
+	investigationKey := fmt.Sprintf("DISPUTE_INVESTIGATION_%s", investigationID)
+	investigationJSON, err := ctx.GetStub().GetState(investigationKey)
+	if err != nil || investigationJSON == nil {
+		return "", fmt.Errorf("investigation %s not found", investigationID)
+	}
+
+	var investigation DisputeInvestigation
+	json.Unmarshal(investigationJSON, &investigation)
+
+	now := time.Now().Format(time.RFC3339)
+	finding := InvestigationFinding{
+		FindingID:       findingID,
+		FindingType:     findingType,
+		Description:     description,
+		Severity:        severity,
+		RelatedEvidence: relatedEvidence,
+		RecordedAt:      now,
+	}
+
+	investigation.Findings = append(investigation.Findings, finding)
+	investigation.Status = "IN_PROGRESS"
+
+	if relatedEvidence != "" {
+		investigation.EvidenceReviewed = append(investigation.EvidenceReviewed, relatedEvidence)
+	}
+
+	investigationUpdatedJSON, _ := json.Marshal(investigation)
+	ctx.GetStub().PutState(investigationKey, investigationUpdatedJSON)
+
+	response := map[string]interface{}{
+		"message":   "Finding recorded",
+		"findingId": findingID,
+		"severity":  severity,
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// CompleteInvestigation completes investigation with recommendation
+func (v *ValidatorContract) CompleteInvestigation(
+	ctx contractapi.TransactionContextInterface,
+	investigationID string,
+	recommendation string,
+	recommendedPenalty string,
+) (string, error) {
+	investigationKey := fmt.Sprintf("DISPUTE_INVESTIGATION_%s", investigationID)
+	investigationJSON, err := ctx.GetStub().GetState(investigationKey)
+	if err != nil || investigationJSON == nil {
+		return "", fmt.Errorf("investigation %s not found", investigationID)
+	}
+
+	var investigation DisputeInvestigation
+	json.Unmarshal(investigationJSON, &investigation)
+
+	now := time.Now().Format(time.RFC3339)
+	investigation.Status = "COMPLETED"
+	investigation.Recommendation = recommendation
+	investigation.RecommendedPenalty = recommendedPenalty
+	investigation.CompletedAt = now
+
+	investigationUpdatedJSON, _ := json.Marshal(investigation)
+	ctx.GetStub().PutState(investigationKey, investigationUpdatedJSON)
+
+	// Emit event for Platform to process
+	eventPayload := map[string]interface{}{
+		"investigationId":    investigationID,
+		"disputeId":          investigation.DisputeID,
+		"validatorId":        investigation.ValidatorID,
+		"recommendation":     recommendation,
+		"recommendedPenalty": recommendedPenalty,
+		"status":             "COMPLETED",
+		"action":             "INVESTIGATION_COMPLETED",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("InvestigationCompleted", eventJSON)
+
+	response := map[string]interface{}{
+		"message":            "Investigation completed",
+		"investigationId":    investigationID,
+		"recommendation":     recommendation,
+		"recommendedPenalty": recommendedPenalty,
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// InvestigateMilestoneDispute investigates milestone-related disputes
+func (v *ValidatorContract) InvestigateMilestoneDispute(
+	ctx contractapi.TransactionContextInterface,
+	investigationID string,
+	disputeID string,
+	milestoneID string,
+	campaignID string,
+	validatorID string,
+	deliverableStatus string,
+	qualityAssessment float64,
+	timelineAssessment string,
+	delayJustified bool,
+	recommendedAction string,
+	comments string,
+) (string, error) {
+	now := time.Now().Format(time.RFC3339)
+
+	milestoneInvestigation := MilestoneInvestigation{
+		InvestigationID:    investigationID,
+		DisputeID:          disputeID,
+		MilestoneID:        milestoneID,
+		CampaignID:         campaignID,
+		ValidatorID:        validatorID,
+		MilestoneReviewed:  true,
+		DeliverableStatus:  deliverableStatus,
+		QualityAssessment:  qualityAssessment,
+		TimelineAssessment: timelineAssessment,
+		DelayJustified:     delayJustified,
+		RecommendedAction:  recommendedAction,
+		Comments:           comments,
+		InvestigatedAt:     now,
+	}
+
+	investigationKey := fmt.Sprintf("MILESTONE_INVESTIGATION_%s", investigationID)
+	investigationJSON, _ := json.Marshal(milestoneInvestigation)
+	ctx.GetStub().PutState(investigationKey, investigationJSON)
+
+	// Emit event
+	eventPayload := map[string]interface{}{
+		"investigationId":   investigationID,
+		"disputeId":         disputeID,
+		"milestoneId":       milestoneID,
+		"recommendedAction": recommendedAction,
+		"action":            "MILESTONE_INVESTIGATED",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("MilestoneInvestigated", eventJSON)
+
+	response := map[string]interface{}{
+		"message":           "Milestone investigation completed",
+		"investigationId":   investigationID,
+		"deliverableStatus": deliverableStatus,
+		"recommendedAction": recommendedAction,
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// RespondToDispute allows validator to respond when they are the respondent
+func (v *ValidatorContract) RespondToDispute(
+	ctx contractapi.TransactionContextInterface,
+	responseID string,
+	disputeID string,
+	validatorID string,
+	responseText string,
+	justification string,
+	supportingDocsJSON string,
+) (string, error) {
+	var supportingDocs []string
+	if supportingDocsJSON != "" {
+		json.Unmarshal([]byte(supportingDocsJSON), &supportingDocs)
+	}
+
+	now := time.Now().Format(time.RFC3339)
+
+	disputeResponse := ValidatorDisputeResponse{
+		ResponseID:     responseID,
+		DisputeID:      disputeID,
+		ValidatorID:    validatorID,
+		ResponseText:   responseText,
+		Justification:  justification,
+		SupportingDocs: supportingDocs,
+		RespondedAt:    now,
+	}
+
+	responseKey := fmt.Sprintf("VALIDATOR_DISPUTE_RESPONSE_%s", responseID)
+	responseJSON, _ := json.Marshal(disputeResponse)
+	ctx.GetStub().PutState(responseKey, responseJSON)
+
+	// Emit event
+	eventPayload := map[string]interface{}{
+		"responseId":  responseID,
+		"disputeId":   disputeID,
+		"validatorId": validatorID,
+		"action":      "VALIDATOR_DISPUTE_RESPONSE",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("ValidatorDisputeResponse", eventJSON)
+
+	return fmt.Sprintf(`{"message": "Response submitted", "responseId": "%s"}`, responseID), nil
+}
+
+// GetInvestigation retrieves an investigation by ID
+func (v *ValidatorContract) GetInvestigation(ctx contractapi.TransactionContextInterface, investigationID string) (string, error) {
+	investigationKey := fmt.Sprintf("DISPUTE_INVESTIGATION_%s", investigationID)
+	investigationJSON, err := ctx.GetStub().GetState(investigationKey)
+	if err != nil || investigationJSON == nil {
+		return "", fmt.Errorf("investigation %s not found", investigationID)
+	}
+	return string(investigationJSON), nil
+}
+
+// GetValidatorDisputes retrieves all disputes involving a validator
+func (v *ValidatorContract) GetValidatorDisputes(ctx contractapi.TransactionContextInterface, validatorID string) (string, error) {
+	queryString := fmt.Sprintf(`{"selector":{"validatorId":"%s"}}`, validatorID)
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return "[]", nil
+	}
+	defer resultsIterator.Close()
+
+	var investigations []DisputeInvestigation
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var inv DisputeInvestigation
+		if err := json.Unmarshal(queryResponse.Value, &inv); err == nil {
+			investigations = append(investigations, inv)
+		}
+	}
+
+	investigationsJSON, _ := json.Marshal(investigations)
+	return string(investigationsJSON), nil
 }
 
 func main() {

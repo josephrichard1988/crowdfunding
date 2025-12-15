@@ -162,6 +162,56 @@ type InvestmentSummaryHash struct {
 	PublishedAt   string `json:"publishedAt"`
 }
 
+// ============================================================================
+// DISPUTE & REFUND STRUCTURES FOR INVESTOR
+// ============================================================================
+
+// InvestorDisputeSubmission represents a dispute submitted by investor
+type InvestorDisputeSubmission struct {
+	SubmissionID    string   `json:"submissionId"`
+	DisputeID       string   `json:"disputeId"`
+	InvestorID      string   `json:"investorId"`
+	DisputeType     string   `json:"disputeType"`     // AGAINST_STARTUP, AGAINST_VALIDATOR, AGAINST_PLATFORM
+	TargetID        string   `json:"targetId"`
+	TargetType      string   `json:"targetType"`
+	CampaignID      string   `json:"campaignId"`
+	AgreementID     string   `json:"agreementId"`
+	Title           string   `json:"title"`
+	Description     string   `json:"description"`
+	ClaimedAmount   float64  `json:"claimedAmount"`
+	EvidenceHashes  []string `json:"evidenceHashes"`  // IPFS hashes
+	Status          string   `json:"status"`          // SUBMITTED, ACKNOWLEDGED, UNDER_REVIEW, RESOLVED
+	CreatedAt       string   `json:"createdAt"`
+}
+
+// RefundRequest represents a refund request from investor
+type RefundRequest struct {
+	RequestID       string  `json:"requestId"`
+	InvestorID      string  `json:"investorId"`
+	CampaignID      string  `json:"campaignId"`
+	AgreementID     string  `json:"agreementId"`
+	StartupID       string  `json:"startupId"`
+	OriginalAmount  float64 `json:"originalAmount"`
+	RequestedAmount float64 `json:"requestedAmount"`
+	RefundReason    string  `json:"refundReason"`    // EARLY_WITHDRAWAL, MID_AGREEMENT_WITHDRAWAL, DISPUTE_RESOLUTION, CAMPAIGN_FAILED
+	DeductionPercent float64 `json:"deductionPercent"` // 15-30%
+	ExpectedRefund  float64 `json:"expectedRefund"`
+	Status          string  `json:"status"`          // PENDING, APPROVED, PROCESSED, REJECTED
+	RequestedAt     string  `json:"requestedAt"`
+	ProcessedAt     string  `json:"processedAt"`
+}
+
+// InvestorDisputeEvidence represents evidence submitted by investor
+type InvestorDisputeEvidence struct {
+	EvidenceID    string `json:"evidenceId"`
+	DisputeID     string `json:"disputeId"`
+	InvestorID    string `json:"investorId"`
+	IPFSHash      string `json:"ipfsHash"`
+	Description   string `json:"description"`
+	EvidenceType  string `json:"evidenceType"` // TRANSACTION_PROOF, COMMUNICATION, DELIVERY_PROOF, OTHER
+	SubmittedAt   string `json:"submittedAt"`
+}
+
 // InitLedger initializes the InvestorOrg ledger
 func (i *InvestorContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	fmt.Println("InvestorOrg contract initialized")
@@ -1333,7 +1383,7 @@ func (i *InvestorContract) InvokeStartupOrgAcknowledge(
 	}
 
 	response := ctx.GetStub().InvokeChaincode(
-		"startuporg",
+		"startup",  // chaincode name (deployed as "startup")
 		args,
 		"common-channel",
 	)
@@ -1373,7 +1423,7 @@ func (i *InvestorContract) InvokeValidatorOrgRequestRisk(
 	}
 
 	response := ctx.GetStub().InvokeChaincode(
-		"validatororg",
+		"validator",  // chaincode name (deployed as "validator")
 		args,
 		"investor-validator-channel",
 	)
@@ -1407,7 +1457,7 @@ func (i *InvestorContract) InvokePlatformOrgConfirm(
 	}
 
 	response := ctx.GetStub().InvokeChaincode(
-		"platformorg",
+		"platform",  // chaincode name (deployed as "platform")
 		args,
 		"investor-platform-channel",
 	)
@@ -1496,6 +1546,283 @@ func (i *InvestorContract) ReceiveCampaignNotification(
 func generateHash(data string) string {
 	hash := sha256.Sum256([]byte(data))
 	return hex.EncodeToString(hash[:])
+}
+
+// ============================================================================
+// DISPUTE FUNCTIONS FOR INVESTOR
+// ============================================================================
+
+// SubmitDispute allows investor to submit a dispute
+// Channel: common-channel (via event for cross-channel processing)
+func (i *InvestorContract) SubmitDispute(
+	ctx contractapi.TransactionContextInterface,
+	submissionID string,
+	disputeID string,
+	investorID string,
+	disputeType string,
+	targetID string,
+	targetType string,
+	campaignID string,
+	agreementID string,
+	title string,
+	description string,
+	claimedAmount float64,
+	evidenceHashesJSON string,
+) (string, error) {
+	var evidenceHashes []string
+	if evidenceHashesJSON != "" {
+		json.Unmarshal([]byte(evidenceHashesJSON), &evidenceHashes)
+	}
+
+	now := time.Now().Format(time.RFC3339)
+
+	submission := InvestorDisputeSubmission{
+		SubmissionID:   submissionID,
+		DisputeID:      disputeID,
+		InvestorID:     investorID,
+		DisputeType:    disputeType,
+		TargetID:       targetID,
+		TargetType:     targetType,
+		CampaignID:     campaignID,
+		AgreementID:    agreementID,
+		Title:          title,
+		Description:    description,
+		ClaimedAmount:  claimedAmount,
+		EvidenceHashes: evidenceHashes,
+		Status:         "SUBMITTED",
+		CreatedAt:      now,
+	}
+
+	submissionKey := fmt.Sprintf("INVESTOR_DISPUTE_%s", submissionID)
+	submissionJSON, _ := json.Marshal(submission)
+	ctx.GetStub().PutState(submissionKey, submissionJSON)
+
+	// Emit event for cross-channel processing
+	eventPayload := map[string]interface{}{
+		"submissionId":  submissionID,
+		"disputeId":     disputeID,
+		"investorId":    investorID,
+		"disputeType":   disputeType,
+		"targetId":      targetID,
+		"targetType":    targetType,
+		"campaignId":    campaignID,
+		"claimedAmount": claimedAmount,
+		"action":        "INVESTOR_DISPUTE_SUBMITTED",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("InvestorDisputeSubmitted", eventJSON)
+
+	response := map[string]interface{}{
+		"message":      "Dispute submitted successfully",
+		"submissionId": submissionID,
+		"disputeId":    disputeID,
+		"status":       "SUBMITTED",
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// SubmitDisputeEvidence allows investor to submit evidence for a dispute
+func (i *InvestorContract) SubmitDisputeEvidence(
+	ctx contractapi.TransactionContextInterface,
+	evidenceID string,
+	disputeID string,
+	investorID string,
+	ipfsHash string,
+	description string,
+	evidenceType string,
+) (string, error) {
+	now := time.Now().Format(time.RFC3339)
+
+	evidence := InvestorDisputeEvidence{
+		EvidenceID:   evidenceID,
+		DisputeID:    disputeID,
+		InvestorID:   investorID,
+		IPFSHash:     ipfsHash,
+		Description:  description,
+		EvidenceType: evidenceType,
+		SubmittedAt:  now,
+	}
+
+	evidenceKey := fmt.Sprintf("INV_DISPUTE_EVIDENCE_%s", evidenceID)
+	evidenceJSON, _ := json.Marshal(evidence)
+	ctx.GetStub().PutState(evidenceKey, evidenceJSON)
+
+	eventPayload := map[string]interface{}{
+		"evidenceId":  evidenceID,
+		"disputeId":   disputeID,
+		"investorId":  investorID,
+		"ipfsHash":    ipfsHash,
+		"action":      "INVESTOR_EVIDENCE_SUBMITTED",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("InvestorEvidenceSubmitted", eventJSON)
+
+	response := map[string]interface{}{
+		"message":    "Evidence submitted",
+		"evidenceId": evidenceID,
+		"disputeId":  disputeID,
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// ============================================================================
+// REFUND FUNCTIONS FOR INVESTOR
+// ============================================================================
+
+// RequestRefund allows investor to request a refund with applicable deduction
+func (i *InvestorContract) RequestRefund(
+	ctx contractapi.TransactionContextInterface,
+	requestID string,
+	investorID string,
+	campaignID string,
+	agreementID string,
+	startupID string,
+	originalAmount float64,
+	refundReason string,
+) (string, error) {
+	// Determine deduction percentage based on reason
+	var deductionPercent float64
+	switch refundReason {
+	case "EARLY_WITHDRAWAL": // Before any milestones
+		deductionPercent = 15.0
+	case "MID_AGREEMENT_WITHDRAWAL": // During active agreement
+		deductionPercent = 25.0
+	case "LATE_WITHDRAWAL": // Near completion
+		deductionPercent = 30.0
+	case "CAMPAIGN_FAILED": // Campaign didn't meet goal
+		deductionPercent = 5.0 // Minimal deduction for failed campaigns
+	case "DISPUTE_RESOLUTION": // Resolved in investor's favor
+		deductionPercent = 0.0 // No deduction if dispute resolved for investor
+	default:
+		deductionPercent = 20.0
+	}
+
+	expectedRefund := originalAmount * (1 - deductionPercent/100)
+	now := time.Now().Format(time.RFC3339)
+
+	refundRequest := RefundRequest{
+		RequestID:        requestID,
+		InvestorID:       investorID,
+		CampaignID:       campaignID,
+		AgreementID:      agreementID,
+		StartupID:        startupID,
+		OriginalAmount:   originalAmount,
+		RequestedAmount:  originalAmount,
+		RefundReason:     refundReason,
+		DeductionPercent: deductionPercent,
+		ExpectedRefund:   expectedRefund,
+		Status:           "PENDING",
+		RequestedAt:      now,
+	}
+
+	requestKey := fmt.Sprintf("REFUND_REQUEST_%s", requestID)
+	requestJSON, _ := json.Marshal(refundRequest)
+	ctx.GetStub().PutState(requestKey, requestJSON)
+
+	// Emit event
+	eventPayload := map[string]interface{}{
+		"requestId":        requestID,
+		"investorId":       investorID,
+		"campaignId":       campaignID,
+		"startupId":        startupID,
+		"originalAmount":   originalAmount,
+		"deductionPercent": deductionPercent,
+		"expectedRefund":   expectedRefund,
+		"action":           "REFUND_REQUESTED",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("RefundRequested", eventJSON)
+
+	response := map[string]interface{}{
+		"message":          "Refund request submitted",
+		"requestId":        requestID,
+		"originalAmount":   originalAmount,
+		"deductionPercent": deductionPercent,
+		"expectedRefund":   expectedRefund,
+		"status":           "PENDING",
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// GetRefundRequest retrieves a refund request
+func (i *InvestorContract) GetRefundRequest(ctx contractapi.TransactionContextInterface, requestID string) (string, error) {
+	requestKey := fmt.Sprintf("REFUND_REQUEST_%s", requestID)
+	requestJSON, err := ctx.GetStub().GetState(requestKey)
+	if err != nil || requestJSON == nil {
+		return "", fmt.Errorf("refund request %s not found", requestID)
+	}
+	return string(requestJSON), nil
+}
+
+// RespondToDispute allows investor to respond when they are the respondent
+func (i *InvestorContract) RespondToDispute(
+	ctx contractapi.TransactionContextInterface,
+	responseID string,
+	disputeID string,
+	investorID string,
+	responseText string,
+	counterEvidenceJSON string,
+) (string, error) {
+	var counterEvidence []string
+	if counterEvidenceJSON != "" {
+		json.Unmarshal([]byte(counterEvidenceJSON), &counterEvidence)
+	}
+
+	now := time.Now().Format(time.RFC3339)
+
+	disputeResponse := map[string]interface{}{
+		"responseId":      responseID,
+		"disputeId":       disputeID,
+		"respondentId":    investorID,
+		"respondentType":  "INVESTOR",
+		"responseText":    responseText,
+		"counterEvidence": counterEvidence,
+		"respondedAt":     now,
+	}
+
+	responseKey := fmt.Sprintf("INV_DISPUTE_RESPONSE_%s", responseID)
+	responseJSON, _ := json.Marshal(disputeResponse)
+	ctx.GetStub().PutState(responseKey, responseJSON)
+
+	eventPayload := map[string]interface{}{
+		"responseId":   responseID,
+		"disputeId":    disputeID,
+		"respondentId": investorID,
+		"action":       "INVESTOR_DISPUTE_RESPONSE",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("InvestorDisputeResponse", eventJSON)
+
+	return fmt.Sprintf(`{"message": "Response submitted", "responseId": "%s"}`, responseID), nil
+}
+
+// GetInvestorDisputes retrieves all disputes involving an investor
+func (i *InvestorContract) GetInvestorDisputes(ctx contractapi.TransactionContextInterface, investorID string) (string, error) {
+	queryString := fmt.Sprintf(`{"selector":{"investorId":"%s"}}`, investorID)
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return "[]", nil
+	}
+	defer resultsIterator.Close()
+
+	var disputes []InvestorDisputeSubmission
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var dispute InvestorDisputeSubmission
+		if err := json.Unmarshal(queryResponse.Value, &dispute); err == nil {
+			disputes = append(disputes, dispute)
+		}
+	}
+
+	disputesJSON, _ := json.Marshal(disputes)
+	return string(disputesJSON), nil
 }
 
 func main() {

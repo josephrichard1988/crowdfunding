@@ -96,9 +96,14 @@ peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-va
 # 🔍 PHASE 2: CAMPAIGN VALIDATION
 **Organization: ValidatorOrg | Channel: startup-validator-channel**
 
-### 2.1 QUERY: Validator Views Campaign Before Validating (Same Channel)
-**NOTE:** ValidatorOrg and StartupOrg share startup-validator-channel, so they can query each other's chaincodes directly
+> ⚠️ **KNOWN ISSUE:** Querying the campaign from ValidatorOrg chaincode before validation may return a 500 error. 
+> This is because the validator chaincode doesn't have direct access to StartupOrg's private data.
+> **Workaround:** Use the startup chaincode to query the campaign (both orgs share startup-validator-channel):
+
+### 2.1 QUERY: Validator Views Campaign Before Validating (Using Startup Chaincode)
+**NOTE:** Query through startup chaincode since both orgs share startup-validator-channel
 ```bash
+# Set ValidatorOrg context first, then query startup chaincode
 peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-validator-channel -n startup -c '{"function":"GetCampaign","Args":["CAMP001"]}'
 ```
 
@@ -669,6 +674,238 @@ export CORE_PEER_LOCALMSPID=PlatformOrgMSP && export CORE_PEER_MSPCONFIGPATH=/ho
 
 ---
 
+# ⚖️ PHASE 16: DISPUTE SYSTEM WITH FILING FEES
+**Anti-spam mechanism: Filing fees prevent frivolous disputes**
+
+## 📋 Dispute Fee Tiers
+
+| Tier | Name | Claim Amount Range | Filing Fee | Refund on Win |
+|------|------|-------------------|------------|---------------|
+| MINOR | Minor Dispute | < $500 | 10 tokens | 100% |
+| STANDARD | Standard Dispute | $500 - $5,000 | 25 tokens | 100% |
+| MAJOR | Major Dispute | $5,000 - $50,000 | 50 tokens | 100% |
+| CRITICAL | Critical Dispute | > $50,000 | 100 tokens | 100% |
+
+## 16.1 Initialize Dispute Fee System (One-time Setup)
+**Organization: PlatformOrg | Channel: common-channel**
+
+### INVOKE: Initialize Dispute Fee Tiers
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"InitializeDisputeFeeTiers","Args":[]}'
+```
+
+### QUERY: Get All Dispute Fee Tiers
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetDisputeFeeTiers","Args":[]}'
+```
+
+## 16.2 Wallet Setup (Required Before Filing Disputes)
+**Organization: PlatformOrg | Channel: common-channel**
+
+### INVOKE: Create Wallet for Investor
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"CreateWallet","Args":["WALLET_INV001","INV001","INVESTOR"]}'
+```
+
+### INVOKE: Create Wallet for Startup
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"CreateWallet","Args":["WALLET_STARTUP001","STARTUP001","STARTUP"]}'
+```
+
+### INVOKE: Deposit Tokens to Wallet
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"DepositTokens","Args":["WALLET_INV001","500","Initial deposit for platform participation"]}'
+```
+
+### QUERY: Check Wallet Balance
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetWallet","Args":["WALLET_INV001"]}'
+```
+
+## 16.3 Filing a Dispute (Fee Auto-Collected)
+**Organization: InvestorOrg or StartupOrg | Channel: common-channel**
+
+> 💡 **How it works:** When you create a dispute, the filing fee is automatically deducted from your wallet.
+> - If you WIN the dispute → Fee is refunded 100%
+> - If you LOSE or dismiss → Fee is forfeited
+
+### INVOKE: Create Dispute (Investor vs Startup - Missed Milestone)
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"CreateDispute","Args":["DISP001","MILESTONE_FAILURE","MISSED_DEADLINE","INV001","INVESTOR","STARTUP001","STARTUP","CAMP001","AGR001","Missed Milestone Deadline","Startup failed to deliver Milestone MS002 by the agreed deadline","5000","[]"]}'
+```
+
+**Expected Response:**
+```json
+{
+  "message": "Dispute created successfully",
+  "disputeId": "DISP001",
+  "ticketNumber": "DISP-123456",
+  "status": "OPEN",
+  "filingFee": 25,
+  "feeNote": "Filing fee is locked. Will be refunded if dispute resolved in your favor, forfeited otherwise."
+}
+```
+
+### QUERY: Get Dispute Details
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetDispute","Args":["DISP001"]}'
+```
+
+### QUERY: Get Dispute Fee Record
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetDisputeFeeByDisputeID","Args":["DISP001"]}'
+```
+
+## 16.4 Dispute Investigation (ValidatorOrg)
+**Organization: ValidatorOrg | Channel: common-channel**
+
+### INVOKE: Accept Dispute Investigation
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n validator -c '{"function":"AcceptDisputeInvestigation","Args":["INVEST001","DISP001","VALIDATOR001"]}'
+```
+
+### INVOKE: Record Investigation Finding
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n validator -c '{"function":"RecordInvestigationFinding","Args":["FINDING001","INVEST001","DISP001","Startup provided evidence of technical issues causing delay. Documentation shows 2-week delay but good faith effort.","[\"delay_evidence.pdf\",\"communication_logs.pdf\"]","PARTIAL_VIOLATION"]}'
+```
+
+### INVOKE: Complete Investigation
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n validator -c '{"function":"CompleteInvestigation","Args":["INVEST001","DISP001","PARTIAL","Both parties share responsibility. Recommend partial refund.","[\"Both parties should improve communication\",\"Milestone deadline was ambitious\"]"]}'
+```
+
+## 16.5 Anonymous Voting on Dispute (If Enabled)
+**Organization: PlatformOrg | Channel: common-channel**
+
+### INVOKE: Enable Voting for Dispute
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"EnableDisputeVoting","Args":["DISP001","2025-12-15T00:00:00Z","2025-12-20T00:00:00Z","5"]}'
+```
+
+### INVOKE: Commit Vote (Phase 1 - Anonymous)
+```bash
+# Voter commits a hash of their vote (vote + secret)
+# Example: SHA256("FAVOR_INITIATOR" + "mysecret123") = <VOTE_HASH>
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"CommitVote","Args":["VOTE001","DISP001","VALIDATOR002","<VOTE_HASH>"]}'
+```
+
+### INVOKE: Reveal Vote (Phase 2 - After Commit Period)
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"RevealVote","Args":["VOTE001","DISP001","VALIDATOR002","FAVOR_INITIATOR","mysecret123"]}'
+```
+
+### INVOKE: Tally Votes
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"TallyVotes","Args":["DISP001"]}'
+```
+
+## 16.6 Resolve Dispute (Fee Refund/Forfeit Auto-Processed)
+**Organization: PlatformOrg | Channel: common-channel**
+
+### INVOKE: Resolve Dispute - Favor Initiator (Fee Refunded)
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"ResolveDispute","Args":["DISP001","FAVOR_INITIATOR","Investigation confirmed startup missed deadline without valid excuse.","[{\"penaltyId\":\"PEN001\",\"userId\":\"STARTUP001\",\"userType\":\"STARTUP\",\"tokenAmount\":500,\"reputationDeduct\":10,\"description\":\"Missed milestone deadline\"}]","[{\"refundOrderId\":\"REF001\",\"fromUserId\":\"STARTUP001\",\"fromUserType\":\"STARTUP\",\"toUserId\":\"INV001\",\"toUserType\":\"INVESTOR\",\"amount\":2500,\"deductionPercent\":0,\"reason\":\"Partial refund for missed milestone\"}]"]}'
+```
+
+### INVOKE: Resolve Dispute - Favor Respondent (Fee Forfeited)
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"ResolveDispute","Args":["DISP001","FAVOR_RESPONDENT","Investigation found dispute claim was invalid.","[]","[]"]}'
+```
+
+### QUERY: Verify Dispute Resolution
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetDispute","Args":["DISP001"]}'
+```
+
+### QUERY: Check Fee Outcome
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetDisputeFeeByDisputeID","Args":["DISP001"]}'
+```
+
+## 16.7 Query User's Dispute Fee History
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetUserDisputeFees","Args":["INV001"]}'
+```
+
+**Expected Response:**
+```json
+{
+  "fees": [...],
+  "totalCount": 3,
+  "totalPaid": 75,
+  "totalRefunded": 25,
+  "totalForfeited": 50
+}
+```
+
+---
+
+# 🌟 PHASE 17: REPUTATION & RATING SYSTEM
+**Organization: PlatformOrg | Channel: common-channel**
+
+## 17.1 ML Rating System (0-100 Scale)
+
+### INVOKE: Record Rating (ML Model Output)
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"RecordRating","Args":["RATING001","STARTUP001","STARTUP","CREDIBILITY","85","ML_MODEL_V1","Based on document verification and historical data"]}'
+```
+
+### QUERY: Get Rating Aggregate
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetRatingAggregate","Args":["STARTUP001","STARTUP"]}'
+```
+
+## 17.2 Reputation Management
+
+### QUERY: Get User Reputation
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetReputation","Args":["STARTUP001","STARTUP"]}'
+```
+
+### QUERY: Get Reputation History
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetReputationHistory","Args":["STARTUP001"]}'
+```
+
+## 17.3 Auto-Suspension Rules
+
+| Condition | Action |
+|-----------|--------|
+| Reputation Score ≤ 30 | Auto-Suspended for 30 days |
+| 3 Consecutive Penalties | Auto-Suspended for 30 days |
+| Reputation Score ≤ 15 | Permanently Blacklisted |
+
+---
+
+# 💳 PHASE 18: CAMPAIGN FEE SYSTEM
+**Organization: PlatformOrg | Channel: common-channel**
+
+## Campaign Fee Tiers
+
+| Tier | Goal Amount Range | Platform Fee |
+|------|------------------|--------------|
+| SMALL | < $10,000 | 50 tokens |
+| MEDIUM | $10,000 - $50,000 | 150 tokens |
+| LARGE | $50,000 - $200,000 | 400 tokens |
+| ENTERPRISE | > $200,000 | 1000 tokens |
+
+### INVOKE: Initialize Campaign Fee Tiers
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"InitializeFeeTiers","Args":[]}'
+```
+
+### INVOKE: Collect Campaign Fee (Before Publication)
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"CollectCampaignFee","Args":["CFEE001","CAMP001","STARTUP001","WALLET_STARTUP001","50000"]}'
+```
+
+### QUERY: Get Campaign Fee Tiers
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID common-channel -n platform -c '{"function":"GetFeeTiers","Args":[]}'
+```
+
+---
+
 ## 📝 NOTES
 
 1. **Replace `<HASH_FROM_STEP_1.6>`** with the actual hash returned from `GetCampaignValidationHash`
@@ -676,3 +913,37 @@ export CORE_PEER_LOCALMSPID=PlatformOrgMSP && export CORE_PEER_MSPCONFIGPATH=/ho
 3. **Switch org context** before running commands for that organization
 4. **Query after each invoke** to verify the operation succeeded
 5. **IDs must be unique** - change CAMP001, INV001, etc. for new test runs
+6. **Dispute Filing Fees** - Ensure wallet has sufficient tokens before creating disputes
+7. **Anonymous Voting** - Uses commit-reveal scheme: commit hash first, reveal vote later
+8. **Auto-Suspension** - System automatically suspends users with low reputation scores
+
+---
+
+## 🔧 TROUBLESHOOTING
+
+### Common Issues
+
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `500 Internal Server Error` on validator query | Chaincode trying to access data from different org's namespace | Use the source org's chaincode for queries (e.g., query `-n startup` even from ValidatorOrg context) |
+| `insufficient balance for dispute filing fee` | Wallet doesn't have enough tokens | Deposit tokens using `DepositTokens` function |
+| `user is suspended` | Reputation score fell below threshold | Wait for suspension period or appeal |
+| `user is blacklisted` | Permanent ban due to severe violations | No automated recovery |
+| `dispute fee already processed` | Trying to process fee twice | Fee is auto-processed on resolution |
+| `cross-channel query failed` | Wrong chaincode name in InvokeChaincode | Ensure using deployed names: `startup`, `validator`, `platform`, `investor` |
+
+### Important: Chaincode Names vs Package Labels
+
+When upgrading chaincodes, remember:
+- **Package Label**: `startup_1`, `startup_2`, etc. (changes with each version)
+- **Chaincode Name**: `startup` (stays constant, used in `-n` flag and `InvokeChaincode`)
+
+Cross-chaincode invocations always use the **chaincode name**, not the label:
+```go
+// Correct - uses deployed chaincode name
+ctx.GetStub().InvokeChaincode("startup", args, "startup-validator-channel")
+
+// Wrong - uses file name or label
+ctx.GetStub().InvokeChaincode("startuporg", args, "startup-validator-channel")  // ❌
+ctx.GetStub().InvokeChaincode("startup_2", args, "startup-validator-channel")   // ❌
+```

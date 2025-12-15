@@ -195,6 +195,49 @@ type Investment struct {
 	AcknowledgedAt string  `json:"acknowledgedAt"`
 }
 
+// ============================================================================
+// DISPUTE & FEE RELATED STRUCTURES FOR STARTUP
+// ============================================================================
+
+// StartupDisputeSubmission represents a dispute submitted by startup
+type StartupDisputeSubmission struct {
+	SubmissionID    string   `json:"submissionId"`
+	DisputeID       string   `json:"disputeId"`
+	StartupID       string   `json:"startupId"`
+	DisputeType     string   `json:"disputeType"`     // AGAINST_VALIDATOR, AGAINST_PLATFORM, AGAINST_INVESTOR
+	TargetID        string   `json:"targetId"`
+	TargetType      string   `json:"targetType"`
+	CampaignID      string   `json:"campaignId"`
+	Title           string   `json:"title"`
+	Description     string   `json:"description"`
+	EvidenceHashes  []string `json:"evidenceHashes"`  // IPFS hashes
+	Status          string   `json:"status"`          // SUBMITTED, ACKNOWLEDGED, UNDER_REVIEW, RESOLVED
+	CreatedAt       string   `json:"createdAt"`
+}
+
+// DisputeEvidence represents evidence for a dispute
+type DisputeEvidence struct {
+	EvidenceID    string `json:"evidenceId"`
+	DisputeID     string `json:"disputeId"`
+	SubmittedBy   string `json:"submittedBy"`
+	IPFSHash      string `json:"ipfsHash"`
+	Description   string `json:"description"`
+	EvidenceType  string `json:"evidenceType"` // DOCUMENT, TRANSACTION_LOG, COMMUNICATION, OTHER
+	SubmittedAt   string `json:"submittedAt"`
+}
+
+// CampaignFeeRecord tracks fee payment for campaign
+type CampaignFeeRecord struct {
+	RecordID        string  `json:"recordId"`
+	CampaignID      string  `json:"campaignId"`
+	StartupID       string  `json:"startupId"`
+	FeeAmount       float64 `json:"feeAmount"`
+	FeeTier         string  `json:"feeTier"`
+	TransactionID   string  `json:"transactionId"`
+	Status          string  `json:"status"` // PENDING, PAID, REFUNDED
+	PaidAt          string  `json:"paidAt"`
+}
+
 // InitLedger initializes the StartupOrg ledger
 func (s *StartupContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	fmt.Println("StartupOrg contract initialized - Merged Version")
@@ -1646,10 +1689,10 @@ func (s *StartupContract) InvokePlatformOrgPublish(
 		[]byte(validationScore),
 	}
 
-	// Cross-channel invocation to platformorg on startup-platform-channel
+	// Cross-channel invocation to platform chaincode on startup-platform-channel
 	// NOTE: The peer executing this must be a member of BOTH channels
 	response := ctx.GetStub().InvokeChaincode(
-		"platformorg",              // chaincode name
+		"platform",              // chaincode name (deployed as "platform")
 		args,                        // function + arguments
 		"startup-platform-channel", // target channel
 	)
@@ -1688,7 +1731,7 @@ func (s *StartupContract) InvokeInvestorOrgNotify(
 	}
 
 	response := ctx.GetStub().InvokeChaincode(
-		"investororg",
+		"investor",  // chaincode name (deployed as "investor")
 		args,
 		"startup-investor-channel",
 	)
@@ -1719,6 +1762,235 @@ func generateCampaignHash(campaign Campaign) string {
 	hashJSON, _ := json.Marshal(hashData)
 	hash := sha256.Sum256(hashJSON)
 	return hex.EncodeToString(hash[:])
+}
+
+// ============================================================================
+// DISPUTE FUNCTIONS FOR STARTUP
+// ============================================================================
+
+// SubmitDispute allows startup to submit a dispute against validator/platform/investor
+// Channel: common-channel (via cross-channel invoke to PlatformOrg)
+func (s *StartupContract) SubmitDispute(
+	ctx contractapi.TransactionContextInterface,
+	submissionID string,
+	disputeID string,
+	startupID string,
+	disputeType string,
+	targetID string,
+	targetType string,
+	campaignID string,
+	title string,
+	description string,
+	evidenceHashesJSON string,
+) (string, error) {
+	// Parse evidence hashes
+	var evidenceHashes []string
+	if evidenceHashesJSON != "" {
+		json.Unmarshal([]byte(evidenceHashesJSON), &evidenceHashes)
+	}
+
+	now := time.Now().Format(time.RFC3339)
+
+	submission := StartupDisputeSubmission{
+		SubmissionID:   submissionID,
+		DisputeID:      disputeID,
+		StartupID:      startupID,
+		DisputeType:    disputeType,
+		TargetID:       targetID,
+		TargetType:     targetType,
+		CampaignID:     campaignID,
+		Title:          title,
+		Description:    description,
+		EvidenceHashes: evidenceHashes,
+		Status:         "SUBMITTED",
+		CreatedAt:      now,
+	}
+
+	// Store local record
+	submissionKey := fmt.Sprintf("STARTUP_DISPUTE_%s", submissionID)
+	submissionJSON, _ := json.Marshal(submission)
+	ctx.GetStub().PutState(submissionKey, submissionJSON)
+
+	// Emit event for cross-channel processing
+	eventPayload := map[string]interface{}{
+		"submissionId": submissionID,
+		"disputeId":    disputeID,
+		"startupId":    startupID,
+		"disputeType":  disputeType,
+		"targetId":     targetID,
+		"targetType":   targetType,
+		"campaignId":   campaignID,
+		"action":       "DISPUTE_SUBMITTED",
+		"channel":      "startup-platform-channel",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("StartupDisputeSubmitted", eventJSON)
+
+	response := map[string]interface{}{
+		"message":      "Dispute submitted successfully",
+		"submissionId": submissionID,
+		"disputeId":    disputeID,
+		"status":       "SUBMITTED",
+		"nextStep":     "Dispute will be forwarded to common-channel for resolution",
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// SubmitDisputeEvidence allows startup to submit additional evidence for a dispute
+func (s *StartupContract) SubmitDisputeEvidence(
+	ctx contractapi.TransactionContextInterface,
+	evidenceID string,
+	disputeID string,
+	startupID string,
+	ipfsHash string,
+	description string,
+	evidenceType string,
+) (string, error) {
+	now := time.Now().Format(time.RFC3339)
+
+	evidence := DisputeEvidence{
+		EvidenceID:   evidenceID,
+		DisputeID:    disputeID,
+		SubmittedBy:  startupID,
+		IPFSHash:     ipfsHash,
+		Description:  description,
+		EvidenceType: evidenceType,
+		SubmittedAt:  now,
+	}
+
+	evidenceKey := fmt.Sprintf("DISPUTE_EVIDENCE_%s", evidenceID)
+	evidenceJSON, _ := json.Marshal(evidence)
+	ctx.GetStub().PutState(evidenceKey, evidenceJSON)
+
+	// Emit event
+	eventPayload := map[string]interface{}{
+		"evidenceId":  evidenceID,
+		"disputeId":   disputeID,
+		"submittedBy": startupID,
+		"ipfsHash":    ipfsHash,
+		"action":      "EVIDENCE_SUBMITTED",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("DisputeEvidenceSubmitted", eventJSON)
+
+	response := map[string]interface{}{
+		"message":    "Evidence submitted successfully",
+		"evidenceId": evidenceID,
+		"disputeId":  disputeID,
+		"ipfsHash":   ipfsHash,
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// RespondToDispute allows startup to respond when they are the respondent
+func (s *StartupContract) RespondToDispute(
+	ctx contractapi.TransactionContextInterface,
+	responseID string,
+	disputeID string,
+	startupID string,
+	responseText string,
+	counterEvidenceJSON string,
+) (string, error) {
+	var counterEvidence []string
+	if counterEvidenceJSON != "" {
+		json.Unmarshal([]byte(counterEvidenceJSON), &counterEvidence)
+	}
+
+	now := time.Now().Format(time.RFC3339)
+
+	disputeResponse := map[string]interface{}{
+		"responseId":      responseID,
+		"disputeId":       disputeID,
+		"respondentId":    startupID,
+		"respondentType":  "STARTUP",
+		"responseText":    responseText,
+		"counterEvidence": counterEvidence,
+		"respondedAt":     now,
+	}
+
+	responseKey := fmt.Sprintf("DISPUTE_RESPONSE_%s", responseID)
+	responseJSON, _ := json.Marshal(disputeResponse)
+	ctx.GetStub().PutState(responseKey, responseJSON)
+
+	// Emit event
+	eventPayload := map[string]interface{}{
+		"responseId":   responseID,
+		"disputeId":    disputeID,
+		"respondentId": startupID,
+		"action":       "DISPUTE_RESPONSE_SUBMITTED",
+	}
+	eventJSON, _ := json.Marshal(eventPayload)
+	ctx.GetStub().SetEvent("DisputeResponseSubmitted", eventJSON)
+
+	return fmt.Sprintf(`{"message": "Response submitted", "responseId": "%s", "disputeId": "%s"}`, responseID, disputeID), nil
+}
+
+// RecordFeePayment records that campaign fee has been paid
+func (s *StartupContract) RecordFeePayment(
+	ctx contractapi.TransactionContextInterface,
+	recordID string,
+	campaignID string,
+	startupID string,
+	feeAmount float64,
+	feeTier string,
+	transactionID string,
+) (string, error) {
+	now := time.Now().Format(time.RFC3339)
+
+	feeRecord := CampaignFeeRecord{
+		RecordID:      recordID,
+		CampaignID:    campaignID,
+		StartupID:     startupID,
+		FeeAmount:     feeAmount,
+		FeeTier:       feeTier,
+		TransactionID: transactionID,
+		Status:        "PAID",
+		PaidAt:        now,
+	}
+
+	feeKey := fmt.Sprintf("CAMPAIGN_FEE_%s", recordID)
+	feeJSON, _ := json.Marshal(feeRecord)
+	ctx.GetStub().PutState(feeKey, feeJSON)
+
+	response := map[string]interface{}{
+		"message":    "Fee payment recorded",
+		"recordId":   recordID,
+		"campaignId": campaignID,
+		"feeAmount":  feeAmount,
+		"feeTier":    feeTier,
+		"status":     "PAID",
+	}
+	responseJSON, _ := json.Marshal(response)
+	return string(responseJSON), nil
+}
+
+// GetStartupDisputes retrieves all disputes involving a startup
+func (s *StartupContract) GetStartupDisputes(ctx contractapi.TransactionContextInterface, startupID string) (string, error) {
+	// Query disputes where startup is involved
+	queryString := fmt.Sprintf(`{"selector":{"startupId":"%s"}}`, startupID)
+	resultsIterator, err := ctx.GetStub().GetQueryResult(queryString)
+	if err != nil {
+		return "[]", nil
+	}
+	defer resultsIterator.Close()
+
+	var disputes []StartupDisputeSubmission
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var dispute StartupDisputeSubmission
+		if err := json.Unmarshal(queryResponse.Value, &dispute); err == nil {
+			disputes = append(disputes, dispute)
+		}
+	}
+
+	disputesJSON, _ := json.Marshal(disputes)
+	return string(disputesJSON), nil
 }
 
 func main() {

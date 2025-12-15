@@ -1,0 +1,146 @@
+[
+  {
+    "name": "StartupPrivateData",
+    "policy": "OR('StartupOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 1,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('StartupOrgMSP.member')"
+    }
+  },
+  {
+    "name": "InvestorPrivateData",
+    "policy": "OR('InvestorOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 1,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('InvestorOrgMSP.member')"
+    }
+  },
+  {
+    "name": "ValidatorPrivateData",
+    "policy": "OR('ValidatorOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 1,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('ValidatorOrgMSP.member')"
+    }
+  },
+  {
+    "name": "PlatformPrivateData",
+    "policy": "OR('PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 1,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('PlatformOrgMSP.member')"
+    }
+  },
+  {
+    "name": "StartupValidatorShared",
+    "policy": "OR('StartupOrgMSP.member', 'ValidatorOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('StartupOrgMSP.member', 'ValidatorOrgMSP.member')"
+    }
+  },
+  {
+    "name": "StartupInvestorShared",
+    "policy": "OR('StartupOrgMSP.member', 'InvestorOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('StartupOrgMSP.member', 'InvestorOrgMSP.member')"
+    }
+  },
+  {
+    "name": "InvestorValidatorShared",
+    "policy": "OR('InvestorOrgMSP.member', 'ValidatorOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('InvestorOrgMSP.member', 'ValidatorOrgMSP.member')"
+    }
+  },
+  {
+    "name": "StartupPlatformShared",
+    "policy": "OR('StartupOrgMSP.member', 'PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('StartupOrgMSP.member', 'PlatformOrgMSP.member')"
+    }
+  },
+  {
+    "name": "InvestorPlatformShared",
+    "policy": "OR('InvestorOrgMSP.member', 'PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('InvestorOrgMSP.member', 'PlatformOrgMSP.member')"
+    }
+  },
+  {
+    "name": "ValidatorPlatformShared",
+    "policy": "OR('ValidatorOrgMSP.member', 'PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('ValidatorOrgMSP.member', 'PlatformOrgMSP.member')"
+    }
+  },
+  {
+    "name": "ThreePartyShared",
+    "policy": "OR('StartupOrgMSP.member', 'InvestorOrgMSP.member', 'PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 3,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('StartupOrgMSP.member', 'InvestorOrgMSP.member', 'PlatformOrgMSP.member')"
+    }
+  },
+  {
+    "name": "AllOrgsShared",
+    "policy": "OR('StartupOrgMSP.member', 'InvestorOrgMSP.member', 'ValidatorOrgMSP.member', 'PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 4,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": false,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('StartupOrgMSP.member', 'InvestorOrgMSP.member', 'ValidatorOrgMSP.member', 'PlatformOrgMSP.member')"
+    }
+  }
+]
