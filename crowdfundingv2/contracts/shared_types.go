@@ -30,15 +30,15 @@ const (
 
 // Investment represents an investment commitment (shared across contracts)
 type Investment struct {
-	InvestmentID     string  `json:"investmentId"`
-	CampaignID       string  `json:"campaignId"`
-	InvestorID       string  `json:"investorId"`
-	Amount           float64 `json:"amount"`
-	Currency         string  `json:"currency"`
-	Status           string  `json:"status"` // COMMITTED, ACKNOWLEDGED, CONFIRMED, WITHDRAWN
-	CommittedAt      string  `json:"committedAt"`
-	ConfirmedAt      string  `json:"confirmedAt"`
-	WithdrawnAt      string  `json:"withdrawnAt"`
+	InvestmentID string  `json:"investmentId"`
+	CampaignID   string  `json:"campaignId"`
+	InvestorID   string  `json:"investorId"`
+	Amount       float64 `json:"amount"`
+	Currency     string  `json:"currency"`
+	Status       string  `json:"status"` // COMMITTED, ACKNOWLEDGED, CONFIRMED, WITHDRAWN
+	CommittedAt  string  `json:"committedAt"`
+	ConfirmedAt  string  `json:"confirmedAt"`
+	WithdrawnAt  string  `json:"withdrawnAt"`
 }
 
 // Milestone for milestone-based fund release (shared structure)
@@ -81,4 +81,51 @@ type NegotiationEntry struct {
 	Amount    float64 `json:"amount"`
 	Terms     string  `json:"terms"`
 	Timestamp string  `json:"timestamp"`
+}
+
+// Campaign represents a startup crowdfunding campaign with all required fields (22 parameters)
+type Campaign struct {
+	CampaignID string `json:"campaignId"`
+	StartupID  string `json:"startupId"`
+
+	// Core Campaign Fields (22 Parameters)
+	Category          string   `json:"category"`
+	Deadline          string   `json:"deadline"`
+	Currency          string   `json:"currency"`
+	HasRaised         bool     `json:"has_raised"`
+	HasGovGrants      bool     `json:"has_gov_grants"`
+	IncorpDate        string   `json:"incorp_date"`
+	ProjectStage      string   `json:"project_stage"`
+	Sector            string   `json:"sector"`
+	Tags              []string `json:"tags"`
+	TeamAvailable     bool     `json:"team_available"`
+	InvestorCommitted bool     `json:"investor_committed"`
+	Duration          int      `json:"duration"`
+	FundingDay        int      `json:"funding_day"`
+	FundingMonth      int      `json:"funding_month"`
+	FundingYear       int      `json:"funding_year"`
+	GoalAmount        float64  `json:"goal_amount"`
+	InvestmentRange   string   `json:"investment_range"`
+	ProjectName       string   `json:"project_name"`
+	Description       string   `json:"description"`
+	Documents         []string `json:"documents"`
+
+	// Calculated/Status Fields
+	OpenDate           string  `json:"open_date"`
+	CloseDate          string  `json:"close_date"`
+	FundsRaisedAmount  float64 `json:"funds_raised_amount"`
+	FundsRaisedPercent float64 `json:"funds_raised_percent"`
+	Status             string  `json:"status"`
+	ValidationStatus   string  `json:"validationStatus"`
+	ValidationScore    float64 `json:"validationScore"`
+	RiskLevel          string  `json:"riskLevel"`
+	ValidationHash     string  `json:"validationHash"`
+	InvestorCount      int     `json:"investorCount"`
+	PlatformStatus     string  `json:"platformStatus"`
+
+	// Timestamps
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+	ApprovedAt  string `json:"approvedAt"`
+	PublishedAt string `json:"publishedAt"`
 }

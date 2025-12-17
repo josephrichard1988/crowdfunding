@@ -249,8 +249,8 @@ package_chaincode() {
     print_info "Running go mod tidy..."
     go mod tidy
     
-    #print_info "Running go mod vendor..."
-    #go mod vendor
+    print_info "Running go mod vendor..."
+    go mod vendor
     
     # Navigate back to crowdfundingv2
     cd "${HOME}/crowdfunding/crowdfundingv2"
@@ -614,12 +614,58 @@ deploy_chaincode() {
 # =============================================================================
 
 upgrade_chaincode() {
-    print_header "⬆️  Upgrading Combined Chaincode"
+    print_header "⬆️  Interactive Chaincode Upgrade"
+    
+    # 1. Repacakging Prompt
+    echo ""
+    read -p "Do you want to repackage the chaincode? (y/n): " repackage_choice
+    
+    local install_mandatory=false
+
+    if [[ "$repackage_choice" == "y" || "$repackage_choice" == "Y" ]]; then
+        package_chaincode
+        if [ $? -ne 0 ]; then return 1; fi
+        install_mandatory=true
+    else
+        print_info "Skipping repackaging step."
+    fi
+    
+    # 2. Installation Prompt
+    local perform_install=false
+    
+    if [ "$install_mandatory" = true ]; then
+        print_warning "Since repackaging was performed, re-installation is COMPULSORY."
+        perform_install=true
+    else
+        echo ""
+        read -p "Do you want to re-install the chaincode on all orgs? (y/n): " install_choice
+        if [[ "$install_choice" == "y" || "$install_choice" == "Y" ]]; then
+            perform_install=true
+        else
+            print_info "Skipping installation step."
+        fi
+    fi
+    
+    if [ "$perform_install" = true ]; then
+        install_on_all_orgs
+        if [ $? -ne 0 ]; then return 1; fi
+    fi
+    
+    # 3. Deployment (Approve + Commit) Prompt
+    echo ""
+    read -p "Do you want to proceed with deployment (Approve & Commit)? (y/n): " deploy_choice
+    
+    if [[ "$deploy_choice" != "y" && "$deploy_choice" != "Y" ]]; then
+        print_info "Deployment skipped by user. Process terminated."
+        return 0
+    fi
+    
+    print_info "Proceeding with deployment..."
     
     # Check if PACKAGE_ID is set
     if [ -z "$PACKAGE_ID" ]; then
         print_error "PACKAGE_ID is not set. Please export the new package ID."
-        print_warning "Run 'source ./deploy_chaincode.sh install' after packaging new version"
+        print_warning "If you skipped installation, ensure PACKAGE_ID is exported manually."
         return 1
     fi
     

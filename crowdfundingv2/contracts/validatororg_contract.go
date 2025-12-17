@@ -212,6 +212,16 @@ func (v *ValidatorContract) ValidateCampaign(
 		return fmt.Errorf("validation request not found: %v", err)
 	}
 
+	// Check for existing validation to prevent re-validation of final states
+	existingValJSON, _ := ctx.GetStub().GetPrivateData(ValidatorPrivateCollection, "VALIDATION_"+validationID)
+	if existingValJSON != nil {
+		var existingVal ValidationRecord
+		json.Unmarshal(existingValJSON, &existingVal)
+		if existingVal.Status == "APPROVED" || existingVal.Status == "REJECTED" {
+			return fmt.Errorf("validation %s is already final: %s", validationID, existingVal.Status)
+		}
+	}
+
 	var documentsReviewed []string
 	if documentsReviewedJSON != "" {
 		json.Unmarshal([]byte(documentsReviewedJSON), &documentsReviewed)
@@ -288,6 +298,11 @@ func (v *ValidatorContract) ApproveOrRejectCampaign(
 	err = json.Unmarshal(validationJSON, &validation)
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal validation: %v", err)
+	}
+
+	// Check if already finalized
+	if validation.Status == "APPROVED" || validation.Status == "REJECTED" {
+		return fmt.Errorf("campaign validation is already final: %s", validation.Status)
 	}
 
 	var comments []string
@@ -968,12 +983,63 @@ func (v *ValidatorContract) RespondToDispute(
 
 // GetCampaign retrieves campaign data from StartupValidatorCollection
 func (v *ValidatorContract) GetCampaign(ctx contractapi.TransactionContextInterface, campaignID string) (string, error) {
+	// 1. Get initial request
 	campaignJSON, err := ctx.GetStub().GetPrivateData(StartupValidatorCollection, "VALIDATION_REQUEST_"+campaignID)
 	if err != nil || campaignJSON == nil {
 		return "", fmt.Errorf("campaign not found: %v", err)
 	}
 
-	return string(campaignJSON), nil
+	// 2. See if there is a status update
+	statusJSON, err := ctx.GetStub().GetPrivateData(StartupValidatorCollection, "VALIDATION_STATUS_"+campaignID)
+	if err != nil {
+		// Just return original if error checking status (though typically shouldn't fail)
+		return string(campaignJSON), nil
+	}
+
+	// If no status update exists, return original
+	if statusJSON == nil {
+		return string(campaignJSON), nil
+	}
+
+	// 3. Merge status into campaign data
+	var campaignMap map[string]interface{}
+	err = json.Unmarshal(campaignJSON, &campaignMap)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal campaign data: %v", err)
+	}
+
+	var statusMap map[string]interface{}
+	err = json.Unmarshal(statusJSON, &statusMap)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal status data: %v", err)
+	}
+
+	// Overwrite/Add updated fields
+	if val, ok := statusMap["status"]; ok {
+		campaignMap["validationStatus"] = val
+	}
+	if val, ok := statusMap["validationHash"]; ok {
+		campaignMap["validationHash"] = val
+	}
+	if val, ok := statusMap["riskLevel"]; ok {
+		campaignMap["riskLevel"] = val
+	}
+	if val, ok := statusMap["dueDiligenceScore"]; ok {
+		campaignMap["dueDiligenceScore"] = val
+	}
+	if val, ok := statusMap["riskScore"]; ok {
+		campaignMap["riskScore"] = val
+	}
+	if val, ok := statusMap["requiredDocuments"]; ok {
+		campaignMap["requiredDocuments"] = val
+	}
+
+	mergedJSON, err := json.Marshal(campaignMap)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal merged data: %v", err)
+	}
+
+	return string(mergedJSON), nil
 }
 
 // GetValidation retrieves a validation record

@@ -21,48 +21,48 @@ type PlatformContract struct {
 
 // PublishedCampaign represents a campaign published on the platform portal (22-parameter format)
 type PublishedCampaign struct {
-	CampaignID          string      `json:"campaignId"`
-	StartupID           string      `json:"startupId"`
-	
+	CampaignID string `json:"campaignId"`
+	StartupID  string `json:"startupId"`
+
 	// 22 Core Parameters
-	Category            string      `json:"category"`
-	Deadline            string      `json:"deadline"`
-	Currency            string      `json:"currency"`
-	HasRaised           bool        `json:"has_raised"`
-	HasGovGrants        bool        `json:"has_gov_grants"`
-	IncorpDate          string      `json:"incorp_date"`
-	ProjectStage        string      `json:"project_stage"`
-	Sector              string      `json:"sector"`
-	Tags                []string    `json:"tags"`
-	TeamAvailable       bool        `json:"team_available"`
-	InvestorCommitted   bool        `json:"investor_committed"`
-	Duration            int         `json:"duration"`
-	FundingDay          int         `json:"funding_day"`
-	FundingMonth        int         `json:"funding_month"`
-	FundingYear         int         `json:"funding_year"`
-	GoalAmount          float64     `json:"goal_amount"`
-	InvestmentRange     string      `json:"investment_range"`
-	ProjectName         string      `json:"project_name"`
-	Description         string      `json:"description"`
-	Documents           []string    `json:"documents"`
-	
+	Category          string   `json:"category"`
+	Deadline          string   `json:"deadline"`
+	Currency          string   `json:"currency"`
+	HasRaised         bool     `json:"has_raised"`
+	HasGovGrants      bool     `json:"has_gov_grants"`
+	IncorpDate        string   `json:"incorp_date"`
+	ProjectStage      string   `json:"project_stage"`
+	Sector            string   `json:"sector"`
+	Tags              []string `json:"tags"`
+	TeamAvailable     bool     `json:"team_available"`
+	InvestorCommitted bool     `json:"investor_committed"`
+	Duration          int      `json:"duration"`
+	FundingDay        int      `json:"funding_day"`
+	FundingMonth      int      `json:"funding_month"`
+	FundingYear       int      `json:"funding_year"`
+	GoalAmount        float64  `json:"goal_amount"`
+	InvestmentRange   string   `json:"investment_range"`
+	ProjectName       string   `json:"project_name"`
+	Description       string   `json:"description"`
+	Documents         []string `json:"documents"`
+
 	// Calculated/Status Fields
-	OpenDate            string      `json:"open_date"`
-	CloseDate           string      `json:"close_date"`
-	FundsRaisedAmount   float64     `json:"funds_raised_amount"`
-	FundsRaisedPercent  float64     `json:"funds_raised_percent"`
-	ValidationScore     float64     `json:"validationScore"`
-	ValidationHash      string      `json:"validationHash"`
-	ValidationVerified  bool        `json:"validationVerified"`
-	RiskScore           float64     `json:"riskScore"`
-	RiskLevel           string      `json:"riskLevel"`
-	Status              string      `json:"status"`
-	InvestorCount       int         `json:"investorCount"`
-	TotalConfirmed      float64     `json:"totalConfirmed"`
-	Milestones          []Milestone `json:"milestones"`
-	AgreementIDs        []string    `json:"agreementIds"`
-	PublishedAt         string      `json:"publishedAt"`
-	UpdatedAt           string      `json:"updatedAt"`
+	OpenDate           string      `json:"open_date"`
+	CloseDate          string      `json:"close_date"`
+	FundsRaisedAmount  float64     `json:"funds_raised_amount"`
+	FundsRaisedPercent float64     `json:"funds_raised_percent"`
+	ValidationScore    float64     `json:"validationScore"`
+	ValidationHash     string      `json:"validationHash"`
+	ValidationVerified bool        `json:"validationVerified"`
+	RiskScore          float64     `json:"riskScore"`
+	RiskLevel          string      `json:"riskLevel"`
+	Status             string      `json:"status"`
+	InvestorCount      int         `json:"investorCount"`
+	TotalConfirmed     float64     `json:"totalConfirmed"`
+	Milestones         []Milestone `json:"milestones"`
+	AgreementIDs       []string    `json:"agreementIds"`
+	PublishedAt        string      `json:"publishedAt"`
+	UpdatedAt          string      `json:"updatedAt"`
 }
 
 // Agreement represents investment agreement
@@ -180,60 +180,60 @@ type TokenExchangeRate struct {
 
 // FeeTier represents platform fee tier
 type FeeTier struct {
-	TierID            string  `json:"tierId"`
-	MinGoalAmount     float64 `json:"minGoalAmount"`
-	MaxGoalAmount     float64 `json:"maxGoalAmount"`
-	FeePercentage     float64 `json:"feePercentage"`
-	Description       string  `json:"description"`
+	TierID        string  `json:"tierId"`
+	MinGoalAmount float64 `json:"minGoalAmount"`
+	MaxGoalAmount float64 `json:"maxGoalAmount"`
+	FeePercentage float64 `json:"feePercentage"`
+	Description   string  `json:"description"`
 }
 
 // FeeCollection represents collected fee
 type FeeCollection struct {
-	CollectionID   string  `json:"collectionId"`
-	CampaignID     string  `json:"campaignId"`
-	StartupID      string  `json:"startupId"`
-	FeeType        string  `json:"feeType"`
-	Amount         float64 `json:"amount"`
-	GoalAmount     float64 `json:"goalAmount"`
-	FeePercentage  float64 `json:"feePercentage"`
-	Status         string  `json:"status"`
-	CollectedAt    string  `json:"collectedAt"`
+	CollectionID  string  `json:"collectionId"`
+	CampaignID    string  `json:"campaignId"`
+	StartupID     string  `json:"startupId"`
+	FeeType       string  `json:"feeType"`
+	Amount        float64 `json:"amount"`
+	GoalAmount    float64 `json:"goalAmount"`
+	FeePercentage float64 `json:"feePercentage"`
+	Status        string  `json:"status"`
+	CollectedAt   string  `json:"collectedAt"`
 }
 
 // DisputeFeeTier represents dispute fee tier
 type DisputeFeeTier struct {
-	TierID        string  `json:"tierId"`
+	TierID         string  `json:"tierId"`
 	MinClaimAmount float64 `json:"minClaimAmount"`
 	MaxClaimAmount float64 `json:"maxClaimAmount"`
-	FeeAmount     float64 `json:"feeAmount"`
-	Description   string  `json:"description"`
+	FeeAmount      float64 `json:"feeAmount"`
+	Description    string  `json:"description"`
 }
 
 // DisputeFeeRecord represents dispute fee payment
 type DisputeFeeRecord struct {
-	FeeRecordID    string  `json:"feeRecordId"`
-	DisputeID      string  `json:"disputeId"`
-	InitiatorID    string  `json:"initiatorId"`
-	ClaimAmount    float64 `json:"claimAmount"`
-	FeeAmount      float64 `json:"feeAmount"`
-	Status         string  `json:"status"`
-	RefundAmount   float64 `json:"refundAmount"`
-	CollectedAt    string  `json:"collectedAt"`
-	ProcessedAt    string  `json:"processedAt"`
+	FeeRecordID  string  `json:"feeRecordId"`
+	DisputeID    string  `json:"disputeId"`
+	InitiatorID  string  `json:"initiatorId"`
+	ClaimAmount  float64 `json:"claimAmount"`
+	FeeAmount    float64 `json:"feeAmount"`
+	Status       string  `json:"status"`
+	RefundAmount float64 `json:"refundAmount"`
+	CollectedAt  string  `json:"collectedAt"`
+	ProcessedAt  string  `json:"processedAt"`
 }
 
 // RatingRecord represents a rating
 type RatingRecord struct {
-	RatingID       string  `json:"ratingId"`
-	RatedUserType  string  `json:"ratedUserType"`
-	RatedUserId    string  `json:"ratedUserId"`
-	RaterUserType  string  `json:"raterUserType"`
-	RaterUserId    string  `json:"raterUserId"`
-	Context        string  `json:"context"`
-	ContextId      string  `json:"contextId"`
-	Rating         float64 `json:"rating"`
-	Comment        string  `json:"comment"`
-	CreatedAt      string  `json:"createdAt"`
+	RatingID      string  `json:"ratingId"`
+	RatedUserType string  `json:"ratedUserType"`
+	RatedUserId   string  `json:"ratedUserId"`
+	RaterUserType string  `json:"raterUserType"`
+	RaterUserId   string  `json:"raterUserId"`
+	Context       string  `json:"context"`
+	ContextId     string  `json:"contextId"`
+	Rating        float64 `json:"rating"`
+	Comment       string  `json:"comment"`
+	CreatedAt     string  `json:"createdAt"`
 }
 
 // RatingAggregate represents aggregated ratings
@@ -247,71 +247,71 @@ type RatingAggregate struct {
 
 // ReputationScore represents user reputation
 type ReputationScore struct {
-	UserType          string  `json:"userType"`
-	UserId            string  `json:"userId"`
-	ReputationScore   float64 `json:"reputationScore"`
-	DisputesWon       int     `json:"disputesWon"`
-	DisputesLost      int     `json:"disputesLost"`
-	TotalDisputes     int     `json:"totalDisputes"`
-	SuccessfulDeals   int     `json:"successfulDeals"`
-	Status            string  `json:"status"`
-	UpdatedAt         string  `json:"updatedAt"`
+	UserType        string  `json:"userType"`
+	UserId          string  `json:"userId"`
+	ReputationScore float64 `json:"reputationScore"`
+	DisputesWon     int     `json:"disputesWon"`
+	DisputesLost    int     `json:"disputesLost"`
+	TotalDisputes   int     `json:"totalDisputes"`
+	SuccessfulDeals int     `json:"successfulDeals"`
+	Status          string  `json:"status"`
+	UpdatedAt       string  `json:"updatedAt"`
 }
 
 // Dispute represents a dispute
 type Dispute struct {
-	DisputeID          string            `json:"disputeId"`
-	InitiatorType      string            `json:"initiatorType"`
-	InitiatorID        string            `json:"initiatorId"`
-	RespondentType     string            `json:"respondentType"`
-	RespondentID       string            `json:"respondentId"`
-	DisputeType        string            `json:"disputeType"`
-	CampaignID         string            `json:"campaignId"`
-	AgreementID        string            `json:"agreementId"`
-	Title              string            `json:"title"`
-	Description        string            `json:"description"`
-	ClaimAmount        float64           `json:"claimAmount"`
-	EvidenceHashes     []string          `json:"evidenceHashes"`
-	Status             string            `json:"status"`
-	InvestigatorID     string            `json:"investigatorId"`
-	InvestigationNotes []string          `json:"investigationNotes"`
-	VotingEnabled      bool              `json:"votingEnabled"`
-	EligibleVoters     []string          `json:"eligibleVoters"`
-	Votes              []VoteCommitment  `json:"votes"`
-	Resolution         string            `json:"resolution"`
-	ResolutionDetails  string            `json:"resolutionDetails"`
-	CreatedAt          string            `json:"createdAt"`
-	ResolvedAt         string            `json:"resolvedAt"`
+	DisputeID          string           `json:"disputeId"`
+	InitiatorType      string           `json:"initiatorType"`
+	InitiatorID        string           `json:"initiatorId"`
+	RespondentType     string           `json:"respondentType"`
+	RespondentID       string           `json:"respondentId"`
+	DisputeType        string           `json:"disputeType"`
+	CampaignID         string           `json:"campaignId"`
+	AgreementID        string           `json:"agreementId"`
+	Title              string           `json:"title"`
+	Description        string           `json:"description"`
+	ClaimAmount        float64          `json:"claimAmount"`
+	EvidenceHashes     []string         `json:"evidenceHashes"`
+	Status             string           `json:"status"`
+	InvestigatorID     string           `json:"investigatorId"`
+	InvestigationNotes []string         `json:"investigationNotes"`
+	VotingEnabled      bool             `json:"votingEnabled"`
+	EligibleVoters     []string         `json:"eligibleVoters"`
+	Votes              []VoteCommitment `json:"votes"`
+	Resolution         string           `json:"resolution"`
+	ResolutionDetails  string           `json:"resolutionDetails"`
+	CreatedAt          string           `json:"createdAt"`
+	ResolvedAt         string           `json:"resolvedAt"`
 }
 
 // VoteCommitment for commit-reveal voting
 type VoteCommitment struct {
-	VoterID    string `json:"voterId"`
-	VoteHash   string `json:"voteHash"`
-	Revealed   bool   `json:"revealed"`
-	Vote       string `json:"vote"`
+	VoterID     string `json:"voterId"`
+	VoteHash    string `json:"voteHash"`
+	Revealed    bool   `json:"revealed"`
+	Vote        string `json:"vote"`
 	CommittedAt string `json:"committedAt"`
 	RevealedAt  string `json:"revealedAt"`
 }
 
 // Penalty represents a penalty
 type Penalty struct {
-	PenaltyID      string  `json:"penaltyId"`
-	UserType       string  `json:"userType"`
-	UserID         string  `json:"userId"`
-	DisputeID      string  `json:"disputeId"`
-	PenaltyType    string  `json:"penaltyType"`
-	Amount         float64 `json:"amount"`
-	AppliedAt      string  `json:"appliedAt"`
+	PenaltyID   string  `json:"penaltyId"`
+	UserType    string  `json:"userType"`
+	UserID      string  `json:"userId"`
+	DisputeID   string  `json:"disputeId"`
+	PenaltyType string  `json:"penaltyType"`
+	Amount      float64 `json:"amount"`
+	AppliedAt   string  `json:"appliedAt"`
 }
 
 // RefundOrder represents a refund order
 type RefundOrder struct {
-	RefundID   string  `json:"refundId"`
-	DisputeID  string  `json:"disputeId"`
-	Recipient  string  `json:"recipient"`
-	Amount     float64 `json:"amount"`
-	ProcessedAt string `json:"processedAt"`
+	RefundID    string  `json:"refundId"`
+	DisputeID   string  `json:"disputeId"`
+	Recipient   string  `json:"recipient"`
+	Amount      float64 `json:"amount"`
+	ProcessedAt string  `json:"processedAt"`
 }
 
 // ============================================================================
@@ -371,6 +371,18 @@ func (p *PlatformContract) PublishCampaignToPortal(
 		return fmt.Errorf("campaign validation hash mismatch. Cannot publish")
 	}
 
+	// Check if already published
+	publicCheckJSON, _ := ctx.GetStub().GetState("CAMPAIGN_PUBLIC_" + campaignID)
+	if publicCheckJSON != nil {
+		var publicCheck map[string]interface{}
+		err := json.Unmarshal(publicCheckJSON, &publicCheck)
+		if err == nil {
+			if status, ok := publicCheck["status"].(string); ok && status == "PUBLISHED" {
+				return fmt.Errorf("campaign %s is already published", campaignID)
+			}
+		}
+	}
+
 	// Step 4: Hash verification successful - proceed with publishing
 	timestamp := time.Now().Format(time.RFC3339)
 
@@ -388,18 +400,18 @@ func (p *PlatformContract) PublishCampaignToPortal(
 	hasGovGrants := campaignData["hasGovGrants"].(bool)
 	teamAvailable := campaignData["teamAvailable"].(bool)
 	investorCommitted := campaignData["investorCommitted"].(bool)
-	
+
 	incorpDate := campaignData["incorpDate"].(string)
 	projectStage := campaignData["projectStage"].(string)
 	sector := campaignData["sector"].(string)
 	investmentRange := campaignData["investmentRange"].(string)
-	
+
 	duration := int(campaignData["duration"].(float64))
 	fundingDay := int(campaignData["fundingDay"].(float64))
 	fundingMonth := int(campaignData["fundingMonth"].(float64))
 	fundingYear := int(campaignData["fundingYear"].(float64))
 	goalAmount := campaignData["goalAmount"].(float64)
-	
+
 	// Extract validation scores
 	validationScore := validationApproval["dueDiligenceScore"].(float64)
 	riskScore := validationApproval["riskScore"].(float64)
@@ -423,41 +435,41 @@ func (p *PlatformContract) PublishCampaignToPortal(
 
 	// Create published campaign
 	campaign := PublishedCampaign{
-		CampaignID:          campaignID,
-		StartupID:           startupID,
-		Category:            category,
-		Deadline:            deadline,
-		Currency:            currency,
-		HasRaised:           hasRaised,
-		HasGovGrants:        hasGovGrants,
-		IncorpDate:          incorpDate,
-		ProjectStage:        projectStage,
-		Sector:              sector,
-		Tags:                tags,
-		TeamAvailable:       teamAvailable,
-		InvestorCommitted:   investorCommitted,
-		Duration:            duration,
-		FundingDay:          fundingDay,
-		FundingMonth:        fundingMonth,
-		FundingYear:         fundingYear,
-		GoalAmount:          goalAmount,
-		InvestmentRange:     investmentRange,
-		ProjectName:         projectName,
-		Description:         description,
-		Documents:           documents,
-		OpenDate:            openDate,
-		CloseDate:           deadline,
-		ValidationScore:     validationScore,
-		ValidationHash:      validationHash,
-		ValidationVerified:  true,
-		RiskScore:           riskScore,
-		RiskLevel:           riskLevel,
-		FundsRaisedAmount:   0,
-		FundsRaisedPercent:  0,
-		InvestorCount:       0,
-		Status:              "PUBLISHED",
-		PublishedAt:         timestamp,
-		Milestones:          []Milestone{},
+		CampaignID:         campaignID,
+		StartupID:          startupID,
+		Category:           category,
+		Deadline:           deadline,
+		Currency:           currency,
+		HasRaised:          hasRaised,
+		HasGovGrants:       hasGovGrants,
+		IncorpDate:         incorpDate,
+		ProjectStage:       projectStage,
+		Sector:             sector,
+		Tags:               tags,
+		TeamAvailable:      teamAvailable,
+		InvestorCommitted:  investorCommitted,
+		Duration:           duration,
+		FundingDay:         fundingDay,
+		FundingMonth:       fundingMonth,
+		FundingYear:        fundingYear,
+		GoalAmount:         goalAmount,
+		InvestmentRange:    investmentRange,
+		ProjectName:        projectName,
+		Description:        description,
+		Documents:          documents,
+		OpenDate:           openDate,
+		CloseDate:          deadline,
+		ValidationScore:    validationScore,
+		ValidationHash:     validationHash,
+		ValidationVerified: true,
+		RiskScore:          riskScore,
+		RiskLevel:          riskLevel,
+		FundsRaisedAmount:  0,
+		FundsRaisedPercent: 0,
+		InvestorCount:      0,
+		Status:             "PUBLISHED",
+		PublishedAt:        timestamp,
+		Milestones:         []Milestone{},
 	}
 
 	campaignJSON, err := json.Marshal(campaign)
@@ -480,13 +492,13 @@ func (p *PlatformContract) PublishCampaignToPortal(
 
 	// Step 5: Send success notification to Startup via StartupPlatformCollection
 	notification := map[string]interface{}{
-		"campaignId":       campaignID,
-		"status":           "PUBLISHED",
-		"message":          fmt.Sprintf("Campaign '%s' has been successfully published on the platform", projectName),
-		"publishedAt":      timestamp,
-		"validationScore":  validationScore,
-		"riskScore":        riskScore,
-		"riskLevel":        riskLevel,
+		"campaignId":      campaignID,
+		"status":          "PUBLISHED",
+		"message":         fmt.Sprintf("Campaign '%s' has been successfully published on the platform", projectName),
+		"publishedAt":     timestamp,
+		"validationScore": validationScore,
+		"riskScore":       riskScore,
+		"riskLevel":       riskLevel,
 	}
 
 	notificationJSON, _ := json.Marshal(notification)
@@ -1939,12 +1951,20 @@ func (p *PlatformContract) GetSharedCampaign(
 	ctx contractapi.TransactionContextInterface,
 	campaignID string,
 ) (string, error) {
-	campaignDataJSON, err := ctx.GetStub().GetPrivateData(StartupPlatformCollection, "CAMPAIGN_SHARE_"+campaignID)
-	if err != nil || campaignDataJSON == nil {
+
+	// Check if already published first - if so, return the published version (status: PUBLISHED)
+	publishedJSON, err := ctx.GetStub().GetPrivateData(PlatformPrivateCollection, "PUBLISHED_CAMPAIGN_"+campaignID)
+	if err == nil && publishedJSON != nil {
+		return string(publishedJSON), nil
+	}
+
+	// If not published, get from shared collection (status: PENDING_PLATFORM_APPROVAL)
+	campaignJSON, err := ctx.GetStub().GetPrivateData(StartupPlatformCollection, "CAMPAIGN_SHARE_"+campaignID)
+	if err != nil || campaignJSON == nil {
 		return "", fmt.Errorf("shared campaign not found: %v", err)
 	}
 
-	return string(campaignDataJSON), nil
+	return string(campaignJSON), nil
 }
 
 // GetAgreement retrieves agreement from ThreePartyCollection
@@ -1974,5 +1994,3 @@ func (p *PlatformContract) GetEscrow(
 
 	return string(escrowJSON), nil
 }
-
-

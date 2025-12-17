@@ -21,41 +21,41 @@ type InvestorContract struct {
 
 // CampaignView represents campaign details visible to investors (22-parameter format)
 type CampaignView struct {
-	CampaignID          string   `json:"campaignId"`
-	StartupID           string   `json:"startupId"`
-	
+	CampaignID string `json:"campaignId"`
+	StartupID  string `json:"startupId"`
+
 	// 22 Core Parameters
-	Category            string   `json:"category"`
-	Deadline            string   `json:"deadline"`
-	Currency            string   `json:"currency"`
-	HasRaised           bool     `json:"has_raised"`
-	HasGovGrants        bool     `json:"has_gov_grants"`
-	IncorpDate          string   `json:"incorp_date"`
-	ProjectStage        string   `json:"project_stage"`
-	Sector              string   `json:"sector"`
-	Tags                []string `json:"tags"`
-	TeamAvailable       bool     `json:"team_available"`
-	InvestorCommitted   bool     `json:"investor_committed"`
-	Duration            int      `json:"duration"`
-	FundingDay          int      `json:"funding_day"`
-	FundingMonth        int      `json:"funding_month"`
-	FundingYear         int      `json:"funding_year"`
-	GoalAmount          float64  `json:"goal_amount"`
-	InvestmentRange     string   `json:"investment_range"`
-	ProjectName         string   `json:"project_name"`
-	Description         string   `json:"description"`
-	Documents           []string `json:"documents"`
-	
+	Category          string   `json:"category"`
+	Deadline          string   `json:"deadline"`
+	Currency          string   `json:"currency"`
+	HasRaised         bool     `json:"has_raised"`
+	HasGovGrants      bool     `json:"has_gov_grants"`
+	IncorpDate        string   `json:"incorp_date"`
+	ProjectStage      string   `json:"project_stage"`
+	Sector            string   `json:"sector"`
+	Tags              []string `json:"tags"`
+	TeamAvailable     bool     `json:"team_available"`
+	InvestorCommitted bool     `json:"investor_committed"`
+	Duration          int      `json:"duration"`
+	FundingDay        int      `json:"funding_day"`
+	FundingMonth      int      `json:"funding_month"`
+	FundingYear       int      `json:"funding_year"`
+	GoalAmount        float64  `json:"goal_amount"`
+	InvestmentRange   string   `json:"investment_range"`
+	ProjectName       string   `json:"project_name"`
+	Description       string   `json:"description"`
+	Documents         []string `json:"documents"`
+
 	// Calculated/Status Fields
-	OpenDate            string   `json:"open_date"`
-	CloseDate           string   `json:"close_date"`
-	FundsRaisedAmount   float64  `json:"funds_raised_amount"`
-	FundsRaisedPercent  float64  `json:"funds_raised_percent"`
-	ValidationScore     float64  `json:"validationScore"`
-	RiskLevel           string   `json:"riskLevel"`
-	InvestorCount       int      `json:"investorCount"`
-	Status              string   `json:"status"`
-	ViewedAt            string   `json:"viewedAt"`
+	OpenDate           string  `json:"open_date"`
+	CloseDate          string  `json:"close_date"`
+	FundsRaisedAmount  float64 `json:"funds_raised_amount"`
+	FundsRaisedPercent float64 `json:"funds_raised_percent"`
+	ValidationScore    float64 `json:"validationScore"`
+	RiskLevel          string  `json:"riskLevel"`
+	InvestorCount      int     `json:"investorCount"`
+	Status             string  `json:"status"`
+	ViewedAt           string  `json:"viewedAt"`
 }
 
 // InvestmentProposal represents an investment proposal with terms
@@ -185,8 +185,10 @@ func (i *InvestorContract) InitLedger(ctx contractapi.TransactionContextInterfac
 // ============================================================================
 
 // ViewCampaign allows investor to view campaign details from public ledger
+// Logs the view for tracking
 func (i *InvestorContract) ViewCampaign(
 	ctx contractapi.TransactionContextInterface,
+	viewRecordID string,
 	campaignID string,
 	investorID string,
 ) (*CampaignView, error) {
@@ -209,22 +211,183 @@ func (i *InvestorContract) ViewCampaign(
 	timestamp := time.Now().Format(time.RFC3339)
 
 	// Create campaign view
+	projectName, _ := publicInfo["projectName"].(string)
+	category, _ := publicInfo["category"].(string)
+	goalAmount, _ := publicInfo["goalAmount"].(float64)
+	currency, _ := publicInfo["currency"].(string)
+	status, _ := publicInfo["status"].(string)
+	description, _ := publicInfo["description"].(string)
+
+	// Handle Arrays safely
+	tags := []string{}
+	if t, ok := publicInfo["tags"].([]interface{}); ok {
+		for _, tag := range t {
+			if s, ok := tag.(string); ok {
+				tags = append(tags, s)
+			}
+		}
+	}
+
+	documents := []string{}
+	if d, ok := publicInfo["documents"].([]interface{}); ok {
+		for _, doc := range d {
+			if s, ok := doc.(string); ok {
+				documents = append(documents, s)
+			}
+		}
+	}
+
 	campaignView := CampaignView{
 		CampaignID:  campaignID,
-		ProjectName: publicInfo["projectName"].(string),
-		Category:    publicInfo["category"].(string),
-		GoalAmount:  publicInfo["goalAmount"].(float64),
-		Currency:    publicInfo["currency"].(string),
-		Status:      publicInfo["status"].(string),
+		ProjectName: projectName,
+		Category:    category,
+		GoalAmount:  goalAmount,
+		Currency:    currency,
+		Status:      status,
+		Description: description,
+		Tags:        tags,
+		Documents:   documents,
 		ViewedAt:    timestamp,
 	}
 
 	// Log view in investor's private collection
 	viewJSON, _ := json.Marshal(campaignView)
-	viewKey := fmt.Sprintf("CAMPAIGN_VIEW_%s_%s", investorID, campaignID)
+	// Use the provided viewRecordID for the key
+	viewKey := "CAMPAIGN_VIEW_" + viewRecordID
 	ctx.GetStub().PutPrivateData(InvestorPrivateCollection, viewKey, viewJSON)
 
 	return &campaignView, nil
+}
+
+// ViewCampaignDetails retrieves public campaign details without logging a view
+// This provides the detailed "convincing" info for an investor to make a decision
+func (i *InvestorContract) ViewCampaignDetails(
+	ctx contractapi.TransactionContextInterface,
+	campaignID string,
+) (*CampaignView, error) {
+
+	// Get campaign from public world state
+	publicJSON, err := ctx.GetStub().GetState("CAMPAIGN_PUBLIC_" + campaignID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read campaign: %v", err)
+	}
+	if publicJSON == nil {
+		return nil, fmt.Errorf("campaign not found")
+	}
+
+	var publicInfo map[string]interface{}
+	err = json.Unmarshal(publicJSON, &publicInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal campaign: %v", err)
+	}
+
+	timestamp := time.Now().Format(time.RFC3339)
+
+	// Create campaign view
+	projectName, _ := publicInfo["projectName"].(string)
+	startupID, _ := publicInfo["startupId"].(string)
+	category, _ := publicInfo["category"].(string)
+	goalAmount, _ := publicInfo["goalAmount"].(float64)
+	currency, _ := publicInfo["currency"].(string)
+	status, _ := publicInfo["status"].(string)
+	description, _ := publicInfo["description"].(string)
+	deadline, _ := publicInfo["deadline"].(string)
+	riskLevel, _ := publicInfo["riskLevel"].(string)
+	validationScore, _ := publicInfo["dueDiligenceScore"].(float64) // Use DD score or Risk Score
+
+	// Handle Arrays safely
+	tags := []string{}
+	if t, ok := publicInfo["tags"].([]interface{}); ok {
+		for _, tag := range t {
+			if s, ok := tag.(string); ok {
+				tags = append(tags, s)
+			}
+		}
+	}
+
+	documents := []string{}
+	// Only show documents if explicitly desired, but user said "convince to invest" so docs are important
+	if d, ok := publicInfo["documents"].([]interface{}); ok {
+		for _, doc := range d {
+			if s, ok := doc.(string); ok {
+				documents = append(documents, s)
+			}
+		}
+	}
+
+	campaignView := CampaignView{
+		CampaignID:      campaignID,
+		StartupID:       startupID,
+		ProjectName:     projectName,
+		Category:        category,
+		GoalAmount:      goalAmount,
+		Currency:        currency,
+		Status:          status,
+		Description:     description,
+		Deadline:        deadline,
+		RiskLevel:       riskLevel,
+		ValidationScore: validationScore,
+		Tags:            tags,
+		Documents:       documents,
+		ViewedAt:        timestamp,
+	}
+
+	return &campaignView, nil
+}
+
+// GetAvailableCampaigns retrieves all published campaigns with minimal details (list view)
+func (i *InvestorContract) GetAvailableCampaigns(
+	ctx contractapi.TransactionContextInterface,
+) ([]*CampaignView, error) {
+
+	// Range query for all public campaigns
+	resultsIterator, err := ctx.GetStub().GetStateByRange("CAMPAIGN_PUBLIC_", "CAMPAIGN_PUBLIC_~")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get campaigns: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var campaigns []*CampaignView
+
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			return nil, err
+		}
+
+		var publicInfo map[string]interface{}
+		err = json.Unmarshal(queryResponse.Value, &publicInfo)
+		if err != nil {
+			continue // Skip malformed records
+		}
+
+		// Extract ID
+		campaignID := ""
+		if id, ok := publicInfo["campaignId"].(string); ok {
+			campaignID = id
+		}
+
+		projectName, _ := publicInfo["projectName"].(string)
+		startupID, _ := publicInfo["startupId"].(string)
+		category, _ := publicInfo["category"].(string)
+		goalAmount, _ := publicInfo["goalAmount"].(float64)
+		status, _ := publicInfo["status"].(string)
+
+		// Minimal view - Glance info only
+		summary := &CampaignView{
+			CampaignID:  campaignID,
+			StartupID:   startupID,
+			ProjectName: projectName,
+			Category:    category,
+			GoalAmount:  goalAmount,
+			Status:      status,
+			Tags:        []string{}, // Empty slice, not nil
+			Documents:   []string{}, // Empty slice, not nil
+		}
+		campaigns = append(campaigns, summary)
+	}
+
+	return campaigns, nil
 }
 
 // ============================================================================
@@ -243,6 +406,12 @@ func (i *InvestorContract) MakeInvestment(
 ) error {
 
 	timestamp := time.Now().Format(time.RFC3339)
+
+	// Check for duplicate investment ID
+	existingInvJSON, _ := ctx.GetStub().GetPrivateData(StartupInvestorCollection, "INVESTMENT_"+investmentID)
+	if existingInvJSON != nil {
+		return fmt.Errorf("investment %s already exists", investmentID)
+	}
 
 	investment := Investment{
 		InvestmentID: investmentID,
@@ -716,11 +885,11 @@ func (i *InvestorContract) RequestValidationDetails(
 
 	// Create validation request
 	request := map[string]interface{}{
-		"requestId":  requestID,
-		"campaignId": campaignID,
-		"investorId": investorID,
+		"requestId":   requestID,
+		"campaignId":  campaignID,
+		"investorId":  investorID,
 		"requestedAt": timestamp,
-		"status":     "PENDING",
+		"status":      "PENDING",
 	}
 
 	requestJSON, err := json.Marshal(request)
@@ -1054,7 +1223,7 @@ func (i *InvestorContract) PublishInvestmentSummary(
 	}
 
 	summaryJSON, _ := json.Marshal(summary)
-	
+
 	// Store on public world state
 	err := ctx.GetStub().PutState("INVESTMENT_SUMMARY_"+summaryID, summaryJSON)
 	if err != nil {

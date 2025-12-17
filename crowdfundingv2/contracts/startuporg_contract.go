@@ -20,72 +20,26 @@ type StartupContract struct {
 // DATA STRUCTURES
 // ============================================================================
 
-// Campaign represents a startup crowdfunding campaign with all required fields (22 parameters)
-type Campaign struct {
-	CampaignID          string   `json:"campaignId"`
-	StartupID           string   `json:"startupId"`
-
-	// Core Campaign Fields (22 Parameters)
-	Category            string   `json:"category"`
-	Deadline            string   `json:"deadline"`
-	Currency            string   `json:"currency"`
-	HasRaised           bool     `json:"has_raised"`
-	HasGovGrants        bool     `json:"has_gov_grants"`
-	IncorpDate          string   `json:"incorp_date"`
-	ProjectStage        string   `json:"project_stage"`
-	Sector              string   `json:"sector"`
-	Tags                []string `json:"tags"`
-	TeamAvailable       bool     `json:"team_available"`
-	InvestorCommitted   bool     `json:"investor_committed"`
-	Duration            int      `json:"duration"`
-	FundingDay          int      `json:"funding_day"`
-	FundingMonth        int      `json:"funding_month"`
-	FundingYear         int      `json:"funding_year"`
-	GoalAmount          float64  `json:"goal_amount"`
-	InvestmentRange     string   `json:"investment_range"`
-	ProjectName         string   `json:"project_name"`
-	Description         string   `json:"description"`
-	Documents           []string `json:"documents"`
-
-	// Calculated/Status Fields
-	OpenDate            string   `json:"open_date"`
-	CloseDate           string   `json:"close_date"`
-	FundsRaisedAmount   float64  `json:"funds_raised_amount"`
-	FundsRaisedPercent  float64  `json:"funds_raised_percent"`
-	Status              string   `json:"status"`
-	ValidationStatus    string   `json:"validationStatus"`
-	ValidationScore     float64  `json:"validationScore"`
-	ValidationHash      string   `json:"validationHash"`
-	InvestorCount       int      `json:"investorCount"`
-	PlatformStatus      string   `json:"platformStatus"`
-
-	// Timestamps
-	CreatedAt           string   `json:"createdAt"`
-	UpdatedAt           string   `json:"updatedAt"`
-	ApprovedAt          string   `json:"approvedAt"`
-	PublishedAt         string   `json:"publishedAt"`
-}
-
 // CampaignPrivateDetails - stored in StartupPrivateCollection
 type CampaignPrivateDetails struct {
-	CampaignID        string               `json:"campaignId"`
-	DocumentHistory   []DocumentSubmission `json:"documentHistory"`
-	CurrentDocuments  []string             `json:"currentDocuments"`
-	UpdateHistory     []CampaignUpdate     `json:"updateHistory"`
-	InternalNotes     string               `json:"internalNotes"`
-	FinancialDetails  string               `json:"financialDetails"`
+	CampaignID       string               `json:"campaignId"`
+	DocumentHistory  []DocumentSubmission `json:"documentHistory"`
+	CurrentDocuments []string             `json:"currentDocuments"`
+	UpdateHistory    []CampaignUpdate     `json:"updateHistory"`
+	InternalNotes    string               `json:"internalNotes"`
+	FinancialDetails string               `json:"financialDetails"`
 }
 
 // CampaignPublicInfo - stored on public ledger (world state)
 type CampaignPublicInfo struct {
-	CampaignID     string  `json:"campaignId"`
-	StartupID      string  `json:"startupId"`
-	ProjectName    string  `json:"projectName"`
-	Category       string  `json:"category"`
-	GoalAmount     float64 `json:"goalAmount"`
-	Currency       string  `json:"currency"`
-	Status         string  `json:"status"`
-	PublishedAt    string  `json:"publishedAt"`
+	CampaignID  string  `json:"campaignId"`
+	StartupID   string  `json:"startupId"`
+	ProjectName string  `json:"projectName"`
+	Category    string  `json:"category"`
+	GoalAmount  float64 `json:"goalAmount"`
+	Currency    string  `json:"currency"`
+	Status      string  `json:"status"`
+	PublishedAt string  `json:"publishedAt"`
 }
 
 // DocumentSubmission tracks each document submission attempt
@@ -129,20 +83,20 @@ type MilestoneReport struct {
 
 // DisputeSubmission represents a dispute submitted by startup
 type DisputeSubmission struct {
-	SubmissionID    string   `json:"submissionId"`
-	DisputeID       string   `json:"disputeId"`
-	StartupID       string   `json:"startupId"`
-	DisputeType     string   `json:"disputeType"`
-	TargetID        string   `json:"targetId"`
-	TargetType      string   `json:"targetType"`
-	CampaignID      string   `json:"campaignId"`
-	AgreementID     string   `json:"agreementId"`
-	Title           string   `json:"title"`
-	Description     string   `json:"description"`
-	ClaimedAmount   float64  `json:"claimedAmount"`
-	EvidenceHashes  []string `json:"evidenceHashes"`
-	Status          string   `json:"status"`
-	CreatedAt       string   `json:"createdAt"`
+	SubmissionID   string   `json:"submissionId"`
+	DisputeID      string   `json:"disputeId"`
+	StartupID      string   `json:"startupId"`
+	DisputeType    string   `json:"disputeType"`
+	TargetID       string   `json:"targetId"`
+	TargetType     string   `json:"targetType"`
+	CampaignID     string   `json:"campaignId"`
+	AgreementID    string   `json:"agreementId"`
+	Title          string   `json:"title"`
+	Description    string   `json:"description"`
+	ClaimedAmount  float64  `json:"claimedAmount"`
+	EvidenceHashes []string `json:"evidenceHashes"`
+	Status         string   `json:"status"`
+	CreatedAt      string   `json:"createdAt"`
 }
 
 // FeePaymentRecord represents fee payment record
@@ -196,7 +150,6 @@ func (s *StartupContract) CreateCampaign(
 	documentsJSON string,
 ) error {
 
-
 	// Check if campaign already exists
 	existingCampaignJSON, err := ctx.GetStub().GetPrivateData(StartupPrivateCollection, "CAMPAIGN_"+campaignID)
 	if err != nil {
@@ -216,7 +169,7 @@ func (s *StartupContract) CreateCampaign(
 	fundingMonthInt, _ := strconv.Atoi(fundingMonth)
 	fundingYearInt, _ := strconv.Atoi(fundingYear)
 	goalAmountFloat, _ := strconv.ParseFloat(goalAmount, 64)
-	
+
 	// Parse JSON arrays
 	var tags []string
 	if tagsJSON != "" {
@@ -243,42 +196,42 @@ func (s *StartupContract) CreateCampaign(
 
 	// Create full campaign object
 	campaign := Campaign{
-		CampaignID:        campaignID,
-		StartupID:         startupID,
-		Category:          category,
-		Deadline:          deadline,
-		Currency:          currency,
-		HasRaised:         hasRaisedBool,
-		HasGovGrants:      hasGovGrantsBool,
-		IncorpDate:        incorpDate,
-		ProjectStage:      projectStage,
-		Sector:            sector,
-		Tags:              tags,
-		TeamAvailable:     teamAvailableBool,
-		InvestorCommitted: investorCommittedBool,
-		Duration:          durationInt,
-		FundingDay:        fundingDayInt,
-		FundingMonth:      fundingMonthInt,
-		FundingYear:       fundingYearInt,
-		GoalAmount:        goalAmountFloat,
-		InvestmentRange:   investmentRange,
-		ProjectName:       projectName,
-		Description:       description,
-		Documents:         documents,
-		OpenDate:          openDate,
-		CloseDate:         closeDate,
-		FundsRaisedAmount: 0,
+		CampaignID:         campaignID,
+		StartupID:          startupID,
+		Category:           category,
+		Deadline:           deadline,
+		Currency:           currency,
+		HasRaised:          hasRaisedBool,
+		HasGovGrants:       hasGovGrantsBool,
+		IncorpDate:         incorpDate,
+		ProjectStage:       projectStage,
+		Sector:             sector,
+		Tags:               tags,
+		TeamAvailable:      teamAvailableBool,
+		InvestorCommitted:  investorCommittedBool,
+		Duration:           durationInt,
+		FundingDay:         fundingDayInt,
+		FundingMonth:       fundingMonthInt,
+		FundingYear:        fundingYearInt,
+		GoalAmount:         goalAmountFloat,
+		InvestmentRange:    investmentRange,
+		ProjectName:        projectName,
+		Description:        description,
+		Documents:          documents,
+		OpenDate:           openDate,
+		CloseDate:          closeDate,
+		FundsRaisedAmount:  0,
 		FundsRaisedPercent: 0,
-		Status:            "DRAFT",
-		ValidationStatus:  "NOT_SUBMITTED",
-		ValidationScore:   0,
-		ValidationHash:    "",
-		InvestorCount:     0,
-		PlatformStatus:    "NOT_PUBLISHED",
-		CreatedAt:         timestamp,
-		UpdatedAt:         timestamp,
-		ApprovedAt:        "",
-		PublishedAt:       "",
+		Status:             "DRAFT",
+		ValidationStatus:   "NOT_SUBMITTED",
+		ValidationScore:    0,
+		ValidationHash:     "",
+		InvestorCount:      0,
+		PlatformStatus:     "NOT_PUBLISHED",
+		CreatedAt:          timestamp,
+		UpdatedAt:          timestamp,
+		ApprovedAt:         "",
+		PublishedAt:        "",
 	}
 
 	// Store full campaign in StartupPrivateCollection
@@ -561,9 +514,39 @@ func (s *StartupContract) ShareCampaignToPlatform(
 		return fmt.Errorf("failed to unmarshal campaign: %v", err)
 	}
 
+	// Sync validation status from StartupValidatorCollection (same as GetCampaign)
+	statusJSON, _ := ctx.GetStub().GetPrivateData(StartupValidatorCollection, "VALIDATION_STATUS_"+campaignID)
+	if statusJSON != nil {
+		var statusUpdate map[string]interface{}
+		json.Unmarshal(statusJSON, &statusUpdate)
+
+		if val, ok := statusUpdate["status"].(string); ok {
+			campaign.ValidationStatus = val
+		}
+		if val, ok := statusUpdate["validationHash"].(string); ok {
+			campaign.ValidationHash = val
+		}
+		if val, ok := statusUpdate["riskLevel"].(string); ok {
+			campaign.RiskLevel = val
+		}
+		if val, ok := statusUpdate["riskScore"].(float64); ok {
+			campaign.ValidationScore = val
+		}
+		if val, ok := statusUpdate["dueDiligenceScore"].(float64); ok {
+			if campaign.ValidationScore == 0 {
+				campaign.ValidationScore = val
+			}
+		}
+	}
+
 	// Verify campaign is validated
 	if campaign.ValidationStatus != "APPROVED" {
 		return fmt.Errorf("campaign must be APPROVED before sharing with platform. Current status: %s", campaign.ValidationStatus)
+	}
+
+	// Verify campaign is not already shared or published
+	if campaign.Status == "PENDING_PLATFORM_APPROVAL" || campaign.Status == "PUBLISHED" {
+		return fmt.Errorf("campaign is already shared or published. Status: %s", campaign.Status)
 	}
 
 	// Verify validation hash matches what validator provided
@@ -610,14 +593,14 @@ func (s *StartupContract) ShareCampaignToPlatform(
 		"projectName":       campaign.ProjectName,
 		"description":       campaign.Description,
 		"documents":         campaign.Documents,
-		
+
 		// Validation info
-		"validationHash":     validationHash,
-		"validationScore":    validationStatus["dueDiligenceScore"],
-		"riskScore":          validationStatus["riskScore"],
-		"riskLevel":          validationStatus["riskLevel"],
-		"validationStatus":   campaign.ValidationStatus,
-		"sharedAt":           timestamp,
+		"validationHash":   validationHash,
+		"validationScore":  validationStatus["dueDiligenceScore"],
+		"riskScore":        validationStatus["riskScore"],
+		"riskLevel":        validationStatus["riskLevel"],
+		"validationStatus": campaign.ValidationStatus,
+		"sharedAt":         timestamp,
 	}
 
 	platformJSON, err := json.Marshal(platformData)
@@ -706,19 +689,19 @@ func (s *StartupContract) SubmitForPublishing(
 
 	// Share with Platform via StartupPlatformCollection
 	platformData := map[string]interface{}{
-		"campaignId":       campaign.CampaignID,
-		"startupId":        campaign.StartupID,
-		"projectName":      campaign.ProjectName,
-		"description":      campaign.Description,
-		"category":         campaign.Category,
-		"goalAmount":       campaign.GoalAmount,
-		"currency":         campaign.Currency,
-		"openDate":         campaign.OpenDate,
-		"closeDate":        campaign.CloseDate,
-		"durationDays":     campaign.Duration,
-		"validationScore":  campaign.ValidationScore,
-		"validationHash":   campaign.ValidationHash,
-		"submittedAt":      timestamp,
+		"campaignId":      campaign.CampaignID,
+		"startupId":       campaign.StartupID,
+		"projectName":     campaign.ProjectName,
+		"description":     campaign.Description,
+		"category":        campaign.Category,
+		"goalAmount":      campaign.GoalAmount,
+		"currency":        campaign.Currency,
+		"openDate":        campaign.OpenDate,
+		"closeDate":       campaign.CloseDate,
+		"durationDays":    campaign.Duration,
+		"validationScore": campaign.ValidationScore,
+		"validationHash":  campaign.ValidationHash,
+		"submittedAt":     timestamp,
 	}
 
 	platformDataJSON, _ := json.Marshal(platformData)
@@ -807,13 +790,13 @@ func (s *StartupContract) AcknowledgeInvestment(
 	timestamp := time.Now().Format(time.RFC3339)
 
 	investment := Investment{
-		InvestmentID:   investmentID,
-		CampaignID:     campaignID,
-		InvestorID:     investorID,
-		Amount:         amount,
-		Currency:       "USD",
-		Status:         "ACKNOWLEDGED",
-		CommittedAt:    timestamp,
+		InvestmentID: investmentID,
+		CampaignID:   campaignID,
+		InvestorID:   investorID,
+		Amount:       amount,
+		Currency:     "USD",
+		Status:       "ACKNOWLEDGED",
+		CommittedAt:  timestamp,
 	}
 
 	investmentJSON, err := json.Marshal(investment)
@@ -1053,16 +1036,16 @@ func (s *StartupContract) SubmitDisputeEvidence(
 	timestamp := time.Now().Format(time.RFC3339)
 
 	evidence := map[string]interface{}{
-		"disputeId":            disputeID,
-		"evidenceHashes":       evidenceHashes,
-		"evidenceDescription":  evidenceDescription,
-		"submittedBy":          "startup",
-		"submittedAt":          timestamp,
+		"disputeId":           disputeID,
+		"evidenceHashes":      evidenceHashes,
+		"evidenceDescription": evidenceDescription,
+		"submittedBy":         "startup",
+		"submittedAt":         timestamp,
 	}
 
 	evidenceJSON, _ := json.Marshal(evidence)
 	evidenceKey := fmt.Sprintf("DISPUTE_EVIDENCE_%s_%s", disputeID, timestamp)
-	
+
 	err := ctx.GetStub().PutPrivateData(AllOrgsCollection, evidenceKey, evidenceJSON)
 	if err != nil {
 		return fmt.Errorf("failed to submit evidence: %v", err)
@@ -1093,7 +1076,7 @@ func (s *StartupContract) RespondToDispute(
 	}
 
 	responseJSON, _ := json.Marshal(response)
-	
+
 	err := ctx.GetStub().PutPrivateData(AllOrgsCollection, "DISPUTE_RESPONSE_"+disputeID, responseJSON)
 	if err != nil {
 		return fmt.Errorf("failed to respond to dispute: %v", err)
@@ -1149,6 +1132,7 @@ func (s *StartupContract) RecordFeePayment(
 
 // GetCampaign retrieves campaign from private collection (only accessible by StartupOrg)
 func (s *StartupContract) GetCampaign(ctx contractapi.TransactionContextInterface, campaignID string) (*Campaign, error) {
+	// 1. Get fundamental campaign data
 	campaignJSON, err := ctx.GetStub().GetPrivateData(StartupPrivateCollection, "CAMPAIGN_"+campaignID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read campaign: %v", err)
@@ -1161,6 +1145,53 @@ func (s *StartupContract) GetCampaign(ctx contractapi.TransactionContextInterfac
 	err = json.Unmarshal(campaignJSON, &campaign)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal campaign: %v", err)
+	}
+
+	// 2. Check for validation updates in StartupValidatorCollection
+	statusJSON, _ := ctx.GetStub().GetPrivateData(StartupValidatorCollection, "VALIDATION_STATUS_"+campaignID)
+	if statusJSON != nil {
+		var statusUpdate map[string]interface{}
+		json.Unmarshal(statusJSON, &statusUpdate)
+
+		if val, ok := statusUpdate["status"].(string); ok {
+			campaign.ValidationStatus = val
+		}
+		if val, ok := statusUpdate["validationHash"].(string); ok {
+			campaign.ValidationHash = val
+		}
+		if val, ok := statusUpdate["riskLevel"].(string); ok {
+			campaign.RiskLevel = val // Assuming RiskLevel exists in Campaign struct, otherwise ignore or map
+		}
+		if val, ok := statusUpdate["riskScore"].(float64); ok {
+			campaign.ValidationScore = val // Mapping risk/dd score to ValidationScore
+		}
+		if val, ok := statusUpdate["dueDiligenceScore"].(float64); ok {
+			if campaign.ValidationScore == 0 {
+				campaign.ValidationScore = val
+			}
+		}
+
+		// If status is APPROVED, update main status if it was SUBMITTED
+		if campaign.ValidationStatus == "APPROVED" && campaign.Status == "SUBMITTED" {
+			// We effectively consider it pre-approved locally, though official status change might require invoke
+			// But for display, showing APPROVED is correct
+		}
+	}
+
+	// 3. Check for publication updates in StartupPlatformCollection
+	publishNoteJSON, _ := ctx.GetStub().GetPrivateData(StartupPlatformCollection, "PUBLISH_NOTIFICATION_"+campaignID)
+	if publishNoteJSON != nil {
+		var publishNote map[string]interface{}
+		json.Unmarshal(publishNoteJSON, &publishNote)
+
+		if status, ok := publishNote["status"].(string); ok && status == "PUBLISHED" {
+			campaign.Status = "PUBLISHED"
+			campaign.PlatformStatus = "PUBLISHED" // Add this field if it is part of the struct or logic
+
+			if val, ok := publishNote["publishedAt"].(string); ok {
+				campaign.PublishedAt = val
+			}
+		}
 	}
 
 	return &campaign, nil
@@ -1226,5 +1257,3 @@ func (s *StartupContract) GetStartupDisputes(ctx contractapi.TransactionContextI
 	// For now, returning placeholder
 	return `[]`, nil
 }
-
-
