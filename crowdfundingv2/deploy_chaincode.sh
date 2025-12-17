@@ -137,7 +137,7 @@
 # Global Configuration Variables
 # =============================================================================
 ORDERER_URL="orderer-api.127-0-0-1.nip.io:9090"
-MSP_BASE_PATH="/home/kajal/crowdfunding/crowdfundingv2/_msp"
+MSP_BASE_PATH="/home/quantum_pulse/crowdfunding/crowdfundingv2/_msp"
 CONTRACTS_PATH="./contracts"
 CHANNEL_NAME="crowdfunding-channel"
 CHAINCODE_NAME="crowdfunding"
@@ -446,7 +446,7 @@ approve_for_org() {
         --package-id "${PACKAGE_ID}" \
         --sequence "${sequence}" \
         --collections-config "${COLLECTIONS_CONFIG}" \
-        --signature-policy "AND('StartupOrgMSP.peer','InvestorOrgMSP.peer','ValidatorOrgMSP.peer','PlatformOrgMSP.peer')"
+        --signature-policy "OR('StartupOrgMSP.peer','InvestorOrgMSP.peer','ValidatorOrgMSP.peer','PlatformOrgMSP.peer')"
     
     if [ $? -eq 0 ]; then
         print_success "Successfully approved for ${org_name} (version: ${version}, sequence: ${sequence})"
@@ -531,7 +531,7 @@ commit_chaincode() {
         --version "${version}" \
         --sequence "${sequence}" \
         --collections-config "${COLLECTIONS_CONFIG}" \
-        --signature-policy "AND('StartupOrgMSP.peer','InvestorOrgMSP.peer','ValidatorOrgMSP.peer','PlatformOrgMSP.peer')" \
+        --signature-policy "OR('StartupOrgMSP.peer','InvestorOrgMSP.peer','ValidatorOrgMSP.peer','PlatformOrgMSP.peer')" \
         --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 \
         --peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 \
         --peerAddresses validatororgpeer-api.127-0-0-1.nip.io:9090 \
@@ -691,7 +691,7 @@ check_commit_readiness() {
         --version "${sequence}" \
         --sequence "${sequence}" \
         --collections-config "${COLLECTIONS_CONFIG}" \
-        --signature-policy "AND('StartupOrgMSP.peer','InvestorOrgMSP.peer','ValidatorOrgMSP.peer','PlatformOrgMSP.peer')"
+        --signature-policy "OR('StartupOrgMSP.peer','InvestorOrgMSP.peer','ValidatorOrgMSP.peer','PlatformOrgMSP.peer')"
 }
 
 # =============================================================================

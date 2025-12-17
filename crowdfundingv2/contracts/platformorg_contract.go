@@ -471,27 +471,9 @@ func (p *PlatformContract) PublishCampaignToPortal(
 		return fmt.Errorf("failed to store published campaign: %v", err)
 	}
 
-	// Store public campaign info on world state for all investors to see
-	publicInfo := map[string]interface{}{
-		"campaignId":   campaignID,
-		"startupId":    startupID,
-		"projectName":  projectName,
-		"category":     category,
-		"sector":       sector,
-		"goalAmount":   goalAmount,
-		"currency":     currency,
-		"openDate":     openDate,
-		"closeDate":    deadline,
-		"status":       "PUBLISHED",
-		"publishedAt":  timestamp,
-	}
-
-	publicJSON, err := json.Marshal(publicInfo)
-	if err != nil {
-		return fmt.Errorf("failed to marshal public info: %v", err)
-	}
-
-	err = ctx.GetStub().PutState("CAMPAIGN_PUBLIC_"+campaignID, publicJSON)
+	// Store FULL campaign info on world state for all investors to see
+	// This makes the 22-parameters visible to everyone
+	err = ctx.GetStub().PutState("CAMPAIGN_PUBLIC_"+campaignID, campaignJSON)
 	if err != nil {
 		return fmt.Errorf("failed to store public campaign info: %v", err)
 	}
@@ -1950,6 +1932,19 @@ func (p *PlatformContract) GetPublishedCampaign(
 	}
 
 	return string(campaignJSON), nil
+}
+
+// GetSharedCampaign retrieves campaign shared by Startup (before publishing)
+func (p *PlatformContract) GetSharedCampaign(
+	ctx contractapi.TransactionContextInterface,
+	campaignID string,
+) (string, error) {
+	campaignDataJSON, err := ctx.GetStub().GetPrivateData(StartupPlatformCollection, "CAMPAIGN_SHARE_"+campaignID)
+	if err != nil || campaignDataJSON == nil {
+		return "", fmt.Errorf("shared campaign not found: %v", err)
+	}
+
+	return string(campaignDataJSON), nil
 }
 
 // GetAgreement retrieves agreement from ThreePartyCollection

@@ -196,6 +196,16 @@ func (s *StartupContract) CreateCampaign(
 	documentsJSON string,
 ) error {
 
+
+	// Check if campaign already exists
+	existingCampaignJSON, err := ctx.GetStub().GetPrivateData(StartupPrivateCollection, "CAMPAIGN_"+campaignID)
+	if err != nil {
+		return fmt.Errorf("failed to read from private collection: %v", err)
+	}
+	if existingCampaignJSON != nil {
+		return fmt.Errorf("campaign %s already exists", campaignID)
+	}
+
 	// Convert string parameters to appropriate types
 	hasRaisedBool, _ := strconv.ParseBool(hasRaised)
 	hasGovGrantsBool, _ := strconv.ParseBool(hasGovGrants)
