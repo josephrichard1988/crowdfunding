@@ -138,7 +138,7 @@ source ./deploy_chaincode.sh switch startup
 
 # Share campaign with Platform (includes validator hash)
 # Note: Use the actual validationHash returned from validator approval
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090  -c '{"function":"StartupContract:ShareCampaignToPlatform","Args":["CAMP001", "9baa6139f132a5acdafc084cd3b00f0706bfc8e1dbed4ea31e804112166246c0"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090  -c '{"function":"StartupContract:ShareCampaignToPlatform","Args":["CAMP001", "b65953f7f263d41636b79c35645e413d26382e2769f557c271753b5337381081"]}'
 ```
 
 **What Happens:**
@@ -160,7 +160,7 @@ source ./deploy_chaincode.sh switch platform
 peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"PlatformContract:GetSharedCampaign","Args":["CAMP001"]}'
 
 # Publish campaign (only 2 parameters: campaignID + validationHash)
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"PlatformContract:PublishCampaignToPortal","Args":["CAMP001","9baa6139f132a5acdafc084cd3b00f0706bfc8e1dbed4ea31e804112166246c0"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"PlatformContract:PublishCampaignToPortal","Args":["CAMP001","b65953f7f263d41636b79c35645e413d26382e2769f557c271753b5337381081"]}'
 ```
 
 **What Happens:**
@@ -283,7 +283,7 @@ peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfundi
 
 ```bash
 # Option 1: Direct investment
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"InvestorContract:MakeInvestment","Args":["INV001","CAMP001","INVESTOR001","25000","USD"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"InvestorContract:MakeInvestment","Args":["INV002","CAMP001","INVESTOR002","25000","USD"]}'
 
 # Option 2: Create investment proposal (negotiate with Startup)
 peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"InvestorContract:CreateInvestmentProposal","Args":["PROPOSAL001","CAMP001","INVESTOR001","STARTUP001","25000","USD","15","3 years","[{\"milestoneId\":\"M1\",\"title\":\"Beta Launch\",\"amount\":10000},{\"milestoneId\":\"M2\",\"title\":\"100 Users\",\"amount\":15000}]","Standard equity terms with milestone-based fund release"]}'
@@ -300,7 +300,7 @@ export CORE_PEER_LOCALMSPID="StartupOrgMSP"
 export CORE_PEER_ADDRESS=startuporgpeer-api.127-0-0-1.nip.io:9090
 export CORE_PEER_MSPCONFIGPATH=$HOME/crowdfunding/crowdfundingv2/_msp/StartupOrg/startuporgadmin/msp
 
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"StartupContract:CreateCampaign","Args":["CAMP001","STARTUP002","SaaS","2025-06-30","USD","true","false","2024-05-15","MVP","Software","[\"SaaS\",\"B2B\",\"Analytics\"]","true","true","120","15","2","2025","150000","100K-500K","Enterprise Analytics Platform","Next-generation analytics platform for enterprise customers with AI-driven insights","[\"pitch_deck.pdf\",\"customer_testimonials.pdf\",\"financial_projections.xlsx\",\"mvp_demo.mp4\"]"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"StartupContract:CreateCampaign","Args":["CAMP002","STARTUP002","SaaS","2025-06-30","USD","true","false","2024-05-15","MVP","Software","[\"SaaS\",\"B2B\",\"Analytics\"]","true","true","120","15","2","2025","150000","100K-500K","Enterprise Analytics Platform","Next-generation analytics platform for enterprise customers with AI-driven insights","[\"pitch_deck.pdf\",\"customer_testimonials.pdf\",\"financial_projections.xlsx\",\"mvp_demo.mp4\"]"]}'
 ```
 
 ### 2.2 Create HealthTech Campaign

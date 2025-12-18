@@ -507,6 +507,15 @@ func (p *PlatformContract) PublishCampaignToPortal(
 		return fmt.Errorf("failed to send notification to startup: %v", err)
 	}
 
+	// Step 6: Update the shared campaign status so Platform and Startup can see it's published
+	campaignData["status"] = "PUBLISHED"
+	campaignData["publishedAt"] = timestamp
+	updatedCampaignJSON, _ := json.Marshal(campaignData)
+	err = ctx.GetStub().PutPrivateData(StartupPlatformCollection, "CAMPAIGN_SHARE_"+campaignID, updatedCampaignJSON)
+	if err != nil {
+		return fmt.Errorf("failed to update shared campaign status: %v", err)
+	}
+
 	return nil
 }
 
@@ -1965,6 +1974,57 @@ func (p *PlatformContract) GetSharedCampaign(
 	}
 
 	return string(campaignJSON), nil
+}
+
+// GetAllSharedCampaigns retrieves all shared campaigns (pending + published)
+func (p *PlatformContract) GetAllSharedCampaigns(ctx contractapi.TransactionContextInterface) ([]map[string]interface{}, error) {
+	var allCampaigns []map[string]interface{}
+
+	// 1. Get pending shared campaigns from StartupPlatformCollection
+	pendingIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupPlatformCollection, "CAMPAIGN_SHARE_", "CAMPAIGN_SHARE_~")
+	if err == nil {
+		defer pendingIterator.Close()
+		for pendingIterator.HasNext() {
+			queryResponse, err := pendingIterator.Next()
+			if err != nil {
+				continue
+			}
+
+			var campaignMap map[string]interface{}
+			err = json.Unmarshal(queryResponse.Value, &campaignMap)
+			if err != nil {
+				continue
+			}
+			campaignMap["status"] = "PENDING_PLATFORM_APPROVAL"
+			allCampaigns = append(allCampaigns, campaignMap)
+		}
+	}
+
+	// 2. Get published campaigns from PlatformPrivateCollection
+	publishedIterator, err := ctx.GetStub().GetPrivateDataByRange(PlatformPrivateCollection, "PUBLISHED_CAMPAIGN_", "PUBLISHED_CAMPAIGN_~")
+	if err == nil {
+		defer publishedIterator.Close()
+		for publishedIterator.HasNext() {
+			queryResponse, err := publishedIterator.Next()
+			if err != nil {
+				continue
+			}
+
+			var campaignMap map[string]interface{}
+			err = json.Unmarshal(queryResponse.Value, &campaignMap)
+			if err != nil {
+				continue
+			}
+			campaignMap["status"] = "PUBLISHED"
+			allCampaigns = append(allCampaigns, campaignMap)
+		}
+	}
+
+	if allCampaigns == nil {
+		allCampaigns = []map[string]interface{}{}
+	}
+
+	return allCampaigns, nil
 }
 
 // GetAgreement retrieves agreement from ThreePartyCollection

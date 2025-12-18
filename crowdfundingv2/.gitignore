@@ -1,57 +1,57 @@
-# Hyperledger Fabric binaries
-bin/
-builders/
-config/
-# MSP credentials and keys (sensitive)
-_msp/
+# # Hyperledger Fabric binaries
+# bin/
+# builders/
+# config/
+# # MSP credentials and keys (sensitive)
+# _msp/
 
-# Wallet identities (sensitive)
-_wallets/
+# # Wallet identities (sensitive)
+# _wallets/
 
-# Gateway connection profiles (may contain sensitive info)
-_gateways/
+# # Gateway connection profiles (may contain sensitive info)
+# _gateways/
 
 
-# Go dependencies
-vendor/
-go.sum
+# # Go dependencies
+# vendor/
+# go.sum
 
-# IDE and editor files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# # IDE and editor files
+# .vscode/
+# .idea/
+# *.swp
+# *.swo
+# *~
 
-# OS generated files
-.DS_Store
-Thumbs.db
-desktop.ini
+# # OS generated files
+# .DS_Store
+# Thumbs.db
+# desktop.ini
 
-# Logs
-*.log
-logs/
+# # Logs
+# *.log
+# logs/
 
-# Temporary files
-tmp/
-temp/
-*.tmp
+# # Temporary files
+# tmp/
+# temp/
+# *.tmp
 
-# Build artifacts
-*.tar.gz
-*.tgz
+# # Build artifacts
+# *.tar.gz
+# *.tgz
 
-# Chaincode packages
-*.tar.gz
-chaincode-*.tgz
+# # Chaincode packages
+# *.tar.gz
+# chaincode-*.tgz
 
-# Node modules (if any Node.js components)
-node_modules/
+# # Node modules (if any Node.js components)
+# node_modules/
 
-# Environment files
-.env
-.env.local
-.env.*.local
+# # Environment files
+# .env
+# .env.local
+# .env.*.local
 
-# Docker related
-docker-compose.override.yml
+# # Docker related
+# docker-compose.override.yml

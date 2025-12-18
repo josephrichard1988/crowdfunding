@@ -137,7 +137,7 @@
 # Global Configuration Variables
 # =============================================================================
 ORDERER_URL="orderer-api.127-0-0-1.nip.io:9090"
-MSP_BASE_PATH="/home/quantum_pulse/crowdfunding/crowdfundingv2/_msp"
+MSP_BASE_PATH="/home/quantum_pulse/crowdfunding/crowdfundingv2/_msp"  #change the path according to your device
 CONTRACTS_PATH="./contracts"
 CHANNEL_NAME="crowdfunding-channel"
 CHAINCODE_NAME="crowdfunding"

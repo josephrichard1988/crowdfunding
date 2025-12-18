@@ -361,6 +361,12 @@ func (i *InvestorContract) GetAvailableCampaigns(
 			continue // Skip malformed records
 		}
 
+		// Extract status first - ONLY include PUBLISHED campaigns
+		status, _ := publicInfo["status"].(string)
+		if status != "PUBLISHED" {
+			continue // Skip non-published campaigns
+		}
+
 		// Extract ID
 		campaignID := ""
 		if id, ok := publicInfo["campaignId"].(string); ok {
@@ -370,21 +376,51 @@ func (i *InvestorContract) GetAvailableCampaigns(
 		projectName, _ := publicInfo["projectName"].(string)
 		startupID, _ := publicInfo["startupId"].(string)
 		category, _ := publicInfo["category"].(string)
+		sector, _ := publicInfo["sector"].(string)
+		description, _ := publicInfo["description"].(string)
+		deadline, _ := publicInfo["deadline"].(string)
+		currency, _ := publicInfo["currency"].(string)
 		goalAmount, _ := publicInfo["goalAmount"].(float64)
-		status, _ := publicInfo["status"].(string)
+		fundsRaisedPercent, _ := publicInfo["fundsRaisedPercent"].(float64)
+		validationScore, _ := publicInfo["validationScore"].(float64)
+		riskLevel, _ := publicInfo["riskLevel"].(string)
 
-		// Minimal view - Glance info only
+		// Extract tags
+		var tags []string
+		if tagsInterface, ok := publicInfo["tags"].([]interface{}); ok {
+			for _, t := range tagsInterface {
+				if tagStr, ok := t.(string); ok {
+					tags = append(tags, tagStr)
+				}
+			}
+		}
+		if tags == nil {
+			tags = []string{}
+		}
+
+		// Published campaign view - rich metadata for investors
 		summary := &CampaignView{
-			CampaignID:  campaignID,
-			StartupID:   startupID,
-			ProjectName: projectName,
-			Category:    category,
-			GoalAmount:  goalAmount,
-			Status:      status,
-			Tags:        []string{}, // Empty slice, not nil
-			Documents:   []string{}, // Empty slice, not nil
+			CampaignID:         campaignID,
+			StartupID:          startupID,
+			ProjectName:        projectName,
+			Category:           category,
+			Sector:             sector,
+			Description:        description,
+			Deadline:           deadline,
+			Currency:           currency,
+			GoalAmount:         goalAmount,
+			FundsRaisedPercent: fundsRaisedPercent,
+			ValidationScore:    validationScore,
+			RiskLevel:          riskLevel,
+			Status:             status,
+			Tags:               tags,
+			Documents:          []string{}, // Empty slice, not nil
 		}
 		campaigns = append(campaigns, summary)
+	}
+
+	if campaigns == nil {
+		campaigns = []*CampaignView{}
 	}
 
 	return campaigns, nil
@@ -429,6 +465,7 @@ func (i *InvestorContract) MakeInvestment(
 	}
 
 	// Store in shared collection with StartupOrg
+	// This enables StartupContract:GetCampaign to see the investment
 	err = ctx.GetStub().PutPrivateData(StartupInvestorCollection, "INVESTMENT_"+investmentID, investmentJSON)
 	if err != nil {
 		return fmt.Errorf("failed to create investment: %v", err)
@@ -491,23 +528,28 @@ func (i *InvestorContract) CreateInvestmentProposal(
 	ctx contractapi.TransactionContextInterface,
 	proposalID string,
 	campaignID string,
-	startupID string,
 	investorID string,
+	startupID string,
 	investmentAmount float64,
 	currency string,
-	proposedTerms string,
+	equity string,
+	duration string,
 	milestonesJSON string,
+	proposedTerms string,
 ) error {
 
 	var milestones []Milestone
 	if milestonesJSON != "" {
 		err := json.Unmarshal([]byte(milestonesJSON), &milestones)
 		if err != nil {
-			return fmt.Errorf("failed to parse milestones: %v", err)
+			return fmt.Errorf("failed to parse milestones: %v. Input was: %s", err, milestonesJSON)
 		}
 	}
 
 	timestamp := time.Now().Format(time.RFC3339)
+
+	// Construct terms from equity and duration if separate fields aren't in struct
+	fullTerms := fmt.Sprintf("Equity: %s, Duration: %s. %s", equity, duration, proposedTerms)
 
 	proposal := InvestmentProposal{
 		ProposalID:       proposalID,
@@ -516,7 +558,7 @@ func (i *InvestorContract) CreateInvestmentProposal(
 		InvestorID:       investorID,
 		InvestmentAmount: investmentAmount,
 		Currency:         currency,
-		ProposedTerms:    proposedTerms,
+		ProposedTerms:    fullTerms,
 		Milestones:       milestones,
 		Status:           "PROPOSED",
 		NegotiationRound: 1,
