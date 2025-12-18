@@ -125,23 +125,23 @@ type AgreementWitness struct {
 
 // DisputeInvestigation represents validator's investigation of a dispute
 type DisputeInvestigation struct {
-	InvestigationID   string                 `json:"investigationId"`
-	DisputeID         string                 `json:"disputeId"`
-	ValidatorID       string                 `json:"validatorId"`
-	DisputeType       string                 `json:"disputeType"`
-	InitiatorID       string                 `json:"initiatorId"`
-	InitiatorType     string                 `json:"initiatorType"`
-	RespondentID      string                 `json:"respondentId"`
-	RespondentType    string                 `json:"respondentType"`
-	CampaignID        string                 `json:"campaignId"`
-	Status            string                 `json:"status"`
-	Findings          []InvestigationFinding `json:"findings"`
-	EvidenceReviewed  []string               `json:"evidenceReviewed"`
-	TransactionLogs   []string               `json:"transactionLogs"`
-	Recommendation    string                 `json:"recommendation"`
-	RecommendedPenalty string                `json:"recommendedPenalty"`
-	AssignedAt        string                 `json:"assignedAt"`
-	CompletedAt       string                 `json:"completedAt"`
+	InvestigationID    string                 `json:"investigationId"`
+	DisputeID          string                 `json:"disputeId"`
+	ValidatorID        string                 `json:"validatorId"`
+	DisputeType        string                 `json:"disputeType"`
+	InitiatorID        string                 `json:"initiatorId"`
+	InitiatorType      string                 `json:"initiatorType"`
+	RespondentID       string                 `json:"respondentId"`
+	RespondentType     string                 `json:"respondentType"`
+	CampaignID         string                 `json:"campaignId"`
+	Status             string                 `json:"status"`
+	Findings           []InvestigationFinding `json:"findings"`
+	EvidenceReviewed   []string               `json:"evidenceReviewed"`
+	TransactionLogs    []string               `json:"transactionLogs"`
+	Recommendation     string                 `json:"recommendation"`
+	RecommendedPenalty string                 `json:"recommendedPenalty"`
+	AssignedAt         string                 `json:"assignedAt"`
+	CompletedAt        string                 `json:"completedAt"`
 }
 
 // InvestigationFinding represents a finding during investigation
@@ -347,15 +347,15 @@ func (v *ValidatorContract) ApproveOrRejectCampaign(
 
 	// Update validation status in StartupValidatorCollection so startup can see it
 	statusUpdate := map[string]interface{}{
-		"validationId":       validationID,
-		"campaignId":         campaignID,
-		"status":             status,
-		"riskLevel":          riskLevel,
-		"dueDiligenceScore":  dueDiligenceScore,
-		"riskScore":          riskScore,
-		"validationHash":     validationHash,
-		"requiredDocuments":  requiredDocuments,
-		"updatedAt":          timestamp,
+		"validationId":      validationID,
+		"campaignId":        campaignID,
+		"status":            status,
+		"riskLevel":         riskLevel,
+		"dueDiligenceScore": dueDiligenceScore,
+		"riskScore":         riskScore,
+		"validationHash":    validationHash,
+		"requiredDocuments": requiredDocuments,
+		"updatedAt":         timestamp,
 	}
 
 	statusJSON, _ := json.Marshal(statusUpdate)
@@ -778,22 +778,22 @@ func (v *ValidatorContract) AcceptDisputeInvestigation(
 	timestamp := time.Now().Format(time.RFC3339)
 
 	investigation := DisputeInvestigation{
-		InvestigationID:   investigationID,
-		DisputeID:         disputeID,
-		ValidatorID:       validatorID,
-		DisputeType:       disputeType,
-		InitiatorID:       initiatorID,
-		InitiatorType:     initiatorType,
-		RespondentID:      respondentID,
-		RespondentType:    respondentType,
-		CampaignID:        campaignID,
-		Status:            "ASSIGNED",
-		Findings:          []InvestigationFinding{},
-		EvidenceReviewed:  []string{},
-		TransactionLogs:   []string{},
-		Recommendation:    "",
+		InvestigationID:    investigationID,
+		DisputeID:          disputeID,
+		ValidatorID:        validatorID,
+		DisputeType:        disputeType,
+		InitiatorID:        initiatorID,
+		InitiatorType:      initiatorType,
+		RespondentID:       respondentID,
+		RespondentType:     respondentType,
+		CampaignID:         campaignID,
+		Status:             "ASSIGNED",
+		Findings:           []InvestigationFinding{},
+		EvidenceReviewed:   []string{},
+		TransactionLogs:    []string{},
+		Recommendation:     "",
 		RecommendedPenalty: "",
-		AssignedAt:        timestamp,
+		AssignedAt:         timestamp,
 	}
 
 	investigationJSON, err := json.Marshal(investigation)
@@ -1042,6 +1042,56 @@ func (v *ValidatorContract) GetCampaign(ctx contractapi.TransactionContextInterf
 	return string(mergedJSON), nil
 }
 
+// GetPendingValidations retrieves all campaigns pending validation from StartupValidatorCollection
+func (v *ValidatorContract) GetPendingValidations(ctx contractapi.TransactionContextInterface) ([]map[string]interface{}, error) {
+	// Use GetPrivateDataByRange to iterate through validation requests
+	resultsIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupValidatorCollection, "VALIDATION_REQUEST_", "VALIDATION_REQUEST_~")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pending validations: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var campaigns []map[string]interface{}
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var campaignMap map[string]interface{}
+		err = json.Unmarshal(queryResponse.Value, &campaignMap)
+		if err != nil {
+			continue
+		}
+
+		// Check status - only include PENDING_VALIDATION
+		campaignID, _ := campaignMap["campaignId"].(string)
+		statusJSON, _ := ctx.GetStub().GetPrivateData(StartupValidatorCollection, "VALIDATION_STATUS_"+campaignID)
+
+		if statusJSON != nil {
+			var statusMap map[string]interface{}
+			json.Unmarshal(statusJSON, &statusMap)
+			if status, ok := statusMap["status"].(string); ok {
+				campaignMap["validationStatus"] = status
+				// Skip if already approved/rejected
+				if status == "APPROVED" || status == "REJECTED" {
+					continue
+				}
+			}
+		} else {
+			campaignMap["validationStatus"] = "PENDING_VALIDATION"
+		}
+
+		campaigns = append(campaigns, campaignMap)
+	}
+
+	if campaigns == nil {
+		campaigns = []map[string]interface{}{}
+	}
+
+	return campaigns, nil
+}
+
 // GetValidation retrieves a validation record
 func (v *ValidatorContract) GetValidation(ctx contractapi.TransactionContextInterface, validationID string) (*ValidationRecord, error) {
 	validationJSON, err := ctx.GetStub().GetPrivateData(ValidatorPrivateCollection, "VALIDATION_"+validationID)
@@ -1129,4 +1179,3 @@ func (v *ValidatorContract) GetValidatorDisputes(ctx contractapi.TransactionCont
 }
 
 // ============================================================================
-

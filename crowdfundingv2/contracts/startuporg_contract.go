@@ -1186,7 +1186,7 @@ func (s *StartupContract) GetCampaign(ctx contractapi.TransactionContextInterfac
 
 		if status, ok := publishNote["status"].(string); ok && status == "PUBLISHED" {
 			campaign.Status = "PUBLISHED"
-			campaign.PlatformStatus = "PUBLISHED" // Add this field if it is part of the struct or logic
+			campaign.PlatformStatus = "PUBLISHED"
 
 			if val, ok := publishNote["publishedAt"].(string); ok {
 				campaign.PublishedAt = val
@@ -1194,7 +1194,117 @@ func (s *StartupContract) GetCampaign(ctx contractapi.TransactionContextInterfac
 		}
 	}
 
+	// 4. Calculate Funds Raised from StartupInvestorCollection
+	// We need to iterate over investments for this campaign.
+	// Since we can't easily query by partial key in private data without an index or knowing IDs,
+	// checking if we have a "INVESTMENT_INDEX" or similar would be best.
+	// However, for now, we'll try a range query if supported in private data (GetPrivateDataByRange).
+
+	investmentIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupInvestorCollection, "INVESTMENT_", "INVESTMENT_~")
+	if err == nil {
+		defer investmentIterator.Close()
+
+		var totalRaised float64
+		// simple set to count unique investors
+		uniqueInvestors := make(map[string]bool)
+
+		for investmentIterator.HasNext() {
+			response, err := investmentIterator.Next()
+			if err != nil {
+				continue
+			}
+
+			var investment map[string]interface{}
+			if err := json.Unmarshal(response.Value, &investment); err != nil {
+				continue
+			}
+
+			// Check if this investment belongs to the current campaign
+			if invCampaignID, ok := investment["campaignId"].(string); ok && invCampaignID == campaignID {
+				// Check status
+				if status, ok := investment["status"].(string); ok && (status == "COMMITTED" || status == "RELEASED") {
+					if amount, ok := investment["amount"].(float64); ok {
+						totalRaised += amount
+					}
+					if invID, ok := investment["investorId"].(string); ok {
+						uniqueInvestors[invID] = true
+					}
+				}
+			}
+		}
+
+		campaign.FundsRaisedAmount = totalRaised
+		campaign.InvestorCount = len(uniqueInvestors)
+		if campaign.GoalAmount > 0 {
+			campaign.FundsRaisedPercent = (totalRaised / campaign.GoalAmount) * 100
+		}
+
+		// Map boolean flags if raised > 0
+		if totalRaised > 0 {
+			campaign.HasRaised = true
+		}
+	}
+
 	return &campaign, nil
+}
+
+// GetAllCampaigns retrieves all campaigns from private collection (only accessible by StartupOrg)
+func (s *StartupContract) GetAllCampaigns(ctx contractapi.TransactionContextInterface) ([]Campaign, error) {
+	// Use GetPrivateDataByRange to iterate through all campaigns
+	resultsIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupPrivateCollection, "CAMPAIGN_", "CAMPAIGN_~")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get campaigns: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var campaigns []Campaign
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			continue
+		}
+
+		// Skip CAMPAIGN_PRIVATE_ keys - only process CAMPAIGN_{ID} keys
+		key := queryResponse.Key
+		if len(key) > 17 && key[:17] == "CAMPAIGN_PRIVATE_" {
+			continue
+		}
+
+		var campaign Campaign
+		err = json.Unmarshal(queryResponse.Value, &campaign)
+		if err != nil {
+			continue
+		}
+
+		// Get validation status updates
+		statusJSON, _ := ctx.GetStub().GetPrivateData(StartupValidatorCollection, "VALIDATION_STATUS_"+campaign.CampaignID)
+		if statusJSON != nil {
+			var statusUpdate map[string]interface{}
+			json.Unmarshal(statusJSON, &statusUpdate)
+			if val, ok := statusUpdate["status"].(string); ok {
+				campaign.ValidationStatus = val
+			}
+			if val, ok := statusUpdate["validationHash"].(string); ok {
+				campaign.ValidationHash = val
+			}
+		}
+
+		// Ensure arrays are never null (fix schema validation)
+		if campaign.Tags == nil {
+			campaign.Tags = []string{}
+		}
+		if campaign.Documents == nil {
+			campaign.Documents = []string{}
+		}
+
+		campaigns = append(campaigns, campaign)
+	}
+
+	if campaigns == nil {
+		campaigns = []Campaign{}
+	}
+
+	return campaigns, nil
 }
 
 // GetCampaignPublic retrieves public campaign info (accessible by all)
