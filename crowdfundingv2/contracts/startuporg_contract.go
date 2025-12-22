@@ -1367,3 +1367,88 @@ func (s *StartupContract) GetStartupDisputes(ctx contractapi.TransactionContextI
 	// For now, returning placeholder
 	return `[]`, nil
 }
+
+// ============================================================================
+// TOKEN INTEGRATION FUNCTIONS (CFT/CFRT)
+// ============================================================================
+
+// GetFeePayments retrieves all fee payments for a startup
+func (s *StartupContract) GetFeePayments(
+	ctx contractapi.TransactionContextInterface,
+	startupID string,
+) (string, error) {
+
+	// Get fee payments from StartupPrivateCollection
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(StartupPrivateCollection, "FEE_PAYMENT_", "FEE_PAYMENT_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query fee payments: %v", err)
+	}
+	defer iterator.Close()
+
+	var payments []FeePaymentRecord
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var record FeePaymentRecord
+		err = json.Unmarshal(queryResponse.Value, &record)
+		if err != nil {
+			continue
+		}
+
+		if record.StartupID == startupID {
+			payments = append(payments, record)
+		}
+	}
+
+	if payments == nil {
+		payments = []FeePaymentRecord{}
+	}
+
+	paymentsJSON, err := json.Marshal(payments)
+	if err != nil {
+		return "[]", fmt.Errorf("failed to marshal payments: %v", err)
+	}
+
+	return string(paymentsJSON), nil
+}
+
+// GetRequiredFees returns the fees required for campaign operations
+func (s *StartupContract) GetRequiredFees(
+	ctx contractapi.TransactionContextInterface,
+) (string, error) {
+
+	// Fee schedule based on 1 INR = 2.5 CFT
+	fees := map[string]interface{}{
+		"registrationFee": map[string]interface{}{
+			"amountCFT":   250,
+			"amountINR":   100,
+			"description": "One-time startup registration fee",
+		},
+		"campaignCreationFee": map[string]interface{}{
+			"amountCFT":   1250,
+			"amountINR":   500,
+			"description": "Fee for creating a new campaign",
+		},
+		"campaignPublishingFee": map[string]interface{}{
+			"amountCFT":   2500,
+			"amountINR":   1000,
+			"description": "Fee for publishing campaign to portal",
+		},
+		"validationFee": map[string]interface{}{
+			"amountCFT":   500,
+			"amountINR":   200,
+			"description": "Fee for campaign validation",
+		},
+	}
+
+	feesJSON, err := json.Marshal(fees)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal fees: %v", err)
+	}
+
+	return string(feesJSON), nil
+}
+

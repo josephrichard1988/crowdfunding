@@ -27,6 +27,7 @@ go.sum
 .DS_Store
 Thumbs.db
 desktop.ini
+*Zone.Identifier
 
 # Logs
 *.log

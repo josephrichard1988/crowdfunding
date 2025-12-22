@@ -1,11 +1,24 @@
 import { useState, useEffect } from 'react';
 import { platformApi } from '../services/api';
-import { LayoutDashboard, Upload, Wallet, AlertTriangle, Loader2, RefreshCw, Globe, CheckCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
+import { LayoutDashboard, Upload, Wallet, AlertTriangle, Loader2, RefreshCw, Globe, CheckCircle, LogIn, Coins } from 'lucide-react';
+
+// Token constants
+const FEES = {
+    publishingFee: 2500,
+    disputeFee: 750
+};
 
 export default function PlatformDashboard() {
+    const { user, isAuthenticated } = useAuth();
     const [sharedCampaigns, setSharedCampaigns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [publishing, setPublishing] = useState(null);
+
+    const cftBalance = user?.wallet?.cftBalance || 0;
+    const isPlatformUser = isAuthenticated && user?.role === 'PLATFORM';
+    const isPreviewMode = !isAuthenticated || user?.role !== 'PLATFORM';
 
     const fetchSharedCampaigns = async () => {
         setLoading(true);
@@ -25,6 +38,10 @@ export default function PlatformDashboard() {
     }, []);
 
     const handlePublish = async (campaignId, validationHash) => {
+        if (isPreviewMode) {
+            alert('Please login as platform admin to publish campaigns');
+            return;
+        }
         setPublishing(campaignId);
         try {
             await platformApi.publishCampaign(campaignId, { validationHash: validationHash || '' });
@@ -40,6 +57,23 @@ export default function PlatformDashboard() {
 
     return (
         <div className="space-y-6">
+            {/* Preview Mode Banner */}
+            {isPreviewMode && (
+                <div className="bg-gradient-to-r from-primary-500 to-primary-600 text-white p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <LayoutDashboard size={24} />
+                        <div>
+                            <h3 className="font-bold">Platform Dashboard Preview</h3>
+                            <p className="text-sm opacity-90">Login as platform admin to manage publishing</p>
+                        </div>
+                    </div>
+                    <Link to="/login" state={{ role: 'PLATFORM' }} className="btn bg-white text-primary-700 hover:bg-gray-100 flex items-center gap-2">
+                        <LogIn size={18} />
+                        Login as Platform
+                    </Link>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -50,10 +84,18 @@ export default function PlatformDashboard() {
                         Manage campaign publishing and platform operations
                     </p>
                 </div>
-                <button onClick={fetchSharedCampaigns} className="btn btn-secondary flex items-center gap-2">
-                    <RefreshCw size={18} />
-                    Refresh
-                </button>
+                <div className="flex gap-3 items-center">
+                    {isPlatformUser && (
+                        <Link to="/wallet" className="flex items-center gap-2 px-4 py-2 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-lg hover:bg-primary-200">
+                            <Coins size={18} />
+                            <span className="font-medium">{cftBalance.toLocaleString()} CFT</span>
+                        </Link>
+                    )}
+                    <button onClick={fetchSharedCampaigns} className="btn btn-secondary flex items-center gap-2">
+                        <RefreshCw size={18} />
+                        Refresh
+                    </button>
+                </div>
             </div>
 
             {/* Stats */}

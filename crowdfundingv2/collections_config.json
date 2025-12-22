@@ -142,5 +142,29 @@
     "endorsementPolicy": {
       "signaturePolicy": "OR('StartupOrgMSP.member', 'InvestorOrgMSP.member', 'ValidatorOrgMSP.member', 'PlatformOrgMSP.member')"
     }
+  },
+  {
+    "name": "TokenLedger",
+    "policy": "OR('PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 1,
+    "blockToLive": 0,
+    "memberOnlyRead": false,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('PlatformOrgMSP.member')"
+    }
+  },
+  {
+    "name": "DisputeResolution",
+    "policy": "OR('ValidatorOrgMSP.member', 'PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": false,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('ValidatorOrgMSP.member', 'PlatformOrgMSP.member')"
+    }
   }
 ]

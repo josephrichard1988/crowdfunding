@@ -1,13 +1,25 @@
 import { useState, useEffect } from 'react';
 import { investorApi } from '../services/api';
-import { TrendingUp, DollarSign, PieChart, Target, Loader2, RefreshCw, Eye, Clock, Briefcase } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { TrendingUp, DollarSign, PieChart, Target, Loader2, RefreshCw, Eye, Clock, Briefcase, LogIn, Coins, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+// Token constants
+const FEES = {
+    investmentFeePercent: 5,
+    disputeFee: 750
+};
+
 export default function InvestorDashboard() {
+    const { user, isAuthenticated } = useAuth();
     const [campaigns, setCampaigns] = useState([]);
     const [investments, setInvestments] = useState([]);
     const [viewedCampaigns, setViewedCampaigns] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const cftBalance = user?.wallet?.cftBalance || 0;
+    const isInvestorUser = isAuthenticated && user?.role === 'INVESTOR';
+    const isPreviewMode = !isAuthenticated || user?.role !== 'INVESTOR';
 
     const fetchData = async () => {
         setLoading(true);
@@ -36,6 +48,23 @@ export default function InvestorDashboard() {
 
     return (
         <div className="space-y-6">
+            {/* Preview Mode Banner */}
+            {isPreviewMode && (
+                <div className="bg-gradient-to-r from-accent-500 to-green-600 text-white p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <TrendingUp size={24} />
+                        <div>
+                            <h3 className="font-bold">Investor Dashboard Preview</h3>
+                            <p className="text-sm opacity-90">Login as an investor to make investments</p>
+                        </div>
+                    </div>
+                    <Link to="/login" state={{ role: 'INVESTOR' }} className="btn bg-white text-accent-700 hover:bg-gray-100 flex items-center gap-2">
+                        <LogIn size={18} />
+                        Login as Investor
+                    </Link>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -46,10 +75,18 @@ export default function InvestorDashboard() {
                         Discover and invest in promising startups
                     </p>
                 </div>
-                <button onClick={fetchData} className="btn btn-secondary flex items-center gap-2">
-                    <RefreshCw size={18} />
-                    Refresh
-                </button>
+                <div className="flex gap-3 items-center">
+                    {isInvestorUser && (
+                        <Link to="/wallet" className="flex items-center gap-2 px-4 py-2 bg-accent-100 dark:bg-accent-900/30 text-accent-700 dark:text-accent-300 rounded-lg hover:bg-accent-200">
+                            <Coins size={18} />
+                            <span className="font-medium">{cftBalance.toLocaleString()} CFT</span>
+                        </Link>
+                    )}
+                    <button onClick={fetchData} className="btn btn-secondary flex items-center gap-2">
+                        <RefreshCw size={18} />
+                        Refresh
+                    </button>
+                </div>
             </div>
 
             {/* Stats */}
@@ -208,8 +245,8 @@ export default function InvestorDashboard() {
                                     <div className="flex items-center gap-2 mb-3 flex-wrap">
                                         {risk && (
                                             <span className={`text-xs px-2 py-1 rounded-full font-medium ${risk === 'LOW' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
-                                                    risk === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                                risk === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                                    'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                                                 }`}>
                                                 {risk} Risk
                                             </span>

@@ -138,7 +138,7 @@ source ./deploy_chaincode.sh switch startup
 
 # Share campaign with Platform (includes validator hash)
 # Note: Use the actual validationHash returned from validator approval
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090  -c '{"function":"StartupContract:ShareCampaignToPlatform","Args":["CAMP001", "b65953f7f263d41636b79c35645e413d26382e2769f557c271753b5337381081"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090  -c '{"function":"StartupContract:ShareCampaignToPlatform","Args":["CAMP001", "05a518ddb643f851387951bb105b85c55b3adc8d210fc761182a711095f0bc85"]}'
 ```
 
 **What Happens:**
@@ -160,7 +160,7 @@ source ./deploy_chaincode.sh switch platform
 peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"PlatformContract:GetSharedCampaign","Args":["CAMP001"]}'
 
 # Publish campaign (only 2 parameters: campaignID + validationHash)
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"PlatformContract:PublishCampaignToPortal","Args":["CAMP001","b65953f7f263d41636b79c35645e413d26382e2769f557c271753b5337381081"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"PlatformContract:PublishCampaignToPortal","Args":["CAMP001","05a518ddb643f851387951bb105b85c55b3adc8d210fc761182a711095f0bc85"]}'
 ```
 
 **What Happens:**
@@ -283,7 +283,7 @@ peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfundi
 
 ```bash
 # Option 1: Direct investment
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"InvestorContract:MakeInvestment","Args":["INV002","CAMP001","INVESTOR002","25000","USD"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"InvestorContract:MakeInvestment","Args":["INV001","CAMP001","INVESTOR001","25000","USD"]}'
 
 # Option 2: Create investment proposal (negotiate with Startup)
 peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"InvestorContract:CreateInvestmentProposal","Args":["PROPOSAL001","CAMP001","INVESTOR001","STARTUP001","25000","USD","15","3 years","[{\"milestoneId\":\"M1\",\"title\":\"Beta Launch\",\"amount\":10000},{\"milestoneId\":\"M2\",\"title\":\"100 Users\",\"amount\":15000}]","Standard equity terms with milestone-based fund release"]}'
@@ -296,9 +296,8 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfund
 ### 2.1 Create SaaS Campaign
 
 ```bash
-export CORE_PEER_LOCALMSPID="StartupOrgMSP"
-export CORE_PEER_ADDRESS=startuporgpeer-api.127-0-0-1.nip.io:9090
-export CORE_PEER_MSPCONFIGPATH=$HOME/crowdfunding/crowdfundingv2/_msp/StartupOrg/startuporgadmin/msp
+source ./deploy_chaincode.sh switch startup
+
 
 peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"StartupContract:CreateCampaign","Args":["CAMP002","STARTUP002","SaaS","2025-06-30","USD","true","false","2024-05-15","MVP","Software","[\"SaaS\",\"B2B\",\"Analytics\"]","true","true","120","15","2","2025","150000","100K-500K","Enterprise Analytics Platform","Next-generation analytics platform for enterprise customers with AI-driven insights","[\"pitch_deck.pdf\",\"customer_testimonials.pdf\",\"financial_projections.xlsx\",\"mvp_demo.mp4\"]"]}'
 ```
@@ -306,7 +305,7 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfund
 ### 2.2 Create HealthTech Campaign
 
 ```bash
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"StartupContract:CreateCampaign","Args":["CAMP001","STARTUP003","HealthTech","2025-04-15","EUR","false","true","2024-11-01","Prototype","Healthcare","[\"HealthTech\",\"Medical\",\"Diagnostics\"]","true","false","60","1","3","2025","75000","50K-100K","AI Medical Diagnostics Tool","AI-powered diagnostic tool for early disease detection with FDA approval in progress","[\"business_plan.pdf\",\"clinical_trial_data.pdf\",\"regulatory_roadmap.pdf\"]"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"StartupContract:CreateCampaign","Args":["CAMP003","STARTUP003","HealthTech","2025-04-15","EUR","false","true","2024-11-01","Prototype","Healthcare","[\"HealthTech\",\"Medical\",\"Diagnostics\"]","true","false","60","1","3","2025","75000","50K-100K","AI Medical Diagnostics Tool","AI-powered diagnostic tool for early disease detection with FDA approval in progress","[\"business_plan.pdf\",\"clinical_trial_data.pdf\",\"regulatory_roadmap.pdf\"]"]}'
 ```
 
 ---
@@ -318,7 +317,7 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfund
 ```bash
 source ./deploy_chaincode.sh switch startup
 
-peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:GetCampaign","Args":["CAMP001"]}'
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:GetCampaign","Args":["CAMP002"]}'
 ```
 
 **Expected:** ✅ Full campaign data returned
@@ -326,12 +325,11 @@ peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfundi
 ### 3.2 InvestorOrg: Try to Query StartupPrivateData (Should Fail)
 
 ```bash
-export CORE_PEER_LOCALMSPID="InvestorOrgMSP"
-export CORE_PEER_ADDRESS=investororgpeer-api.127-0-0-1.nip.io:9090
-export CORE_PEER_MSPCONFIGPATH=$HOME/crowdfunding/crowdfundingv2/_msp/InvestorOrg/investororgadmin/msp
+source ./deploy_chaincode.sh switch investor
+
 
 # This will fail because InvestorOrg cannot access StartupPrivateData collection
-peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:GetCampaign","Args":["CAMP001"]}'
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:GetCampaign","Args":["CAMP002"]}'
 ```
 
 **Expected:** ❌ Error or empty response (cannot access StartupPrivateData)
@@ -339,7 +337,7 @@ peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfundi
 ### 3.3 InvestorOrg: Query Public Campaign Info (Should Work)
 
 ```bash
-peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"PlatformContract:GetPublishedCampaign","Args":["CAMP001"]}'
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"PlatformContract:GetPublishedCampaign","Args":["CAMP002"]}'
 ```
 
 **Expected:** ✅ Basic public campaign info (name, category, goal, status)

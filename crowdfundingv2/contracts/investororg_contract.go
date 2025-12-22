@@ -1274,3 +1274,154 @@ func (i *InvestorContract) PublishInvestmentSummary(
 
 	return nil
 }
+
+// ============================================================================
+// TOKEN INTEGRATION FUNCTIONS (CFT/CFRT)
+// ============================================================================
+
+// InvestorFeeRecord represents fee record for investors
+type InvestorFeeRecord struct {
+	RecordID        string  `json:"recordId"`
+	InvestorID      string  `json:"investorId"`
+	CampaignID      string  `json:"campaignId"`
+	FeeType         string  `json:"feeType"`
+	AmountCFT       float64 `json:"amountCFT"`
+	TransactionHash string  `json:"transactionHash"`
+	PaidAt          string  `json:"paidAt"`
+}
+
+// GetInvestorFees returns the fees applicable to investors
+func (i *InvestorContract) GetInvestorFees(
+	ctx contractapi.TransactionContextInterface,
+) (string, error) {
+
+	// Fee schedule based on 1 INR = 2.5 CFT
+	fees := map[string]interface{}{
+		"investmentFee": map[string]interface{}{
+			"percentage":  5.0,
+			"description": "5% fee on investment amount (deducted at investment)",
+		},
+		"disputeFilingFee": map[string]interface{}{
+			"amountCFT":   750,
+			"amountINR":   300,
+			"description": "Fee for filing a dispute",
+		},
+		"withdrawalFee": map[string]interface{}{
+			"percentage":  1.0,
+			"description": "1% fee for CFT to Fiat withdrawal",
+		},
+	}
+
+	feesJSON, err := json.Marshal(fees)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal fees: %v", err)
+	}
+
+	return string(feesJSON), nil
+}
+
+// RecordInvestmentFee records investment fee paid
+func (i *InvestorContract) RecordInvestmentFee(
+	ctx contractapi.TransactionContextInterface,
+	recordID string,
+	investorID string,
+	campaignID string,
+	investmentAmountCFT float64,
+	feeAmountCFT float64,
+	transactionHash string,
+) error {
+
+	timestamp := time.Now().Format(time.RFC3339)
+
+	record := InvestorFeeRecord{
+		RecordID:        recordID,
+		InvestorID:      investorID,
+		CampaignID:      campaignID,
+		FeeType:         "INVESTMENT_FEE",
+		AmountCFT:       feeAmountCFT,
+		TransactionHash: transactionHash,
+		PaidAt:          timestamp,
+	}
+
+	recordJSON, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fee record: %v", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(InvestorPrivateCollection, "FEE_PAYMENT_"+recordID, recordJSON)
+	if err != nil {
+		return fmt.Errorf("failed to record fee: %v", err)
+	}
+
+	return nil
+}
+
+// GetInvestorFeePayments retrieves all fee payments for an investor
+func (i *InvestorContract) GetInvestorFeePayments(
+	ctx contractapi.TransactionContextInterface,
+	investorID string,
+) (string, error) {
+
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(InvestorPrivateCollection, "FEE_PAYMENT_", "FEE_PAYMENT_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query fee payments: %v", err)
+	}
+	defer iterator.Close()
+
+	var payments []InvestorFeeRecord
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var record InvestorFeeRecord
+		err = json.Unmarshal(queryResponse.Value, &record)
+		if err != nil {
+			continue
+		}
+
+		if record.InvestorID == investorID {
+			payments = append(payments, record)
+		}
+	}
+
+	if payments == nil {
+		payments = []InvestorFeeRecord{}
+	}
+
+	paymentsJSON, err := json.Marshal(payments)
+	if err != nil {
+		return "[]", fmt.Errorf("failed to marshal payments: %v", err)
+	}
+
+	return string(paymentsJSON), nil
+}
+
+// GetDisputePenaltyScheduleForInvestor returns penalty amounts for investor disputes
+func (i *InvestorContract) GetDisputePenaltyScheduleForInvestor(
+	ctx contractapi.TransactionContextInterface,
+) (string, error) {
+
+	// Penalty schedule based on 1 INR = 2.5 CFT
+	penalties := map[string]interface{}{
+		"fraudulentClaim": map[string]interface{}{
+			"penaltyCFT":  500,
+			"penaltyINR":  200,
+			"description": "Filing fraudulent claims against startups",
+		},
+		"refundAbuse": map[string]interface{}{
+			"penaltyCFT":  375,
+			"penaltyINR":  150,
+			"description": "Abusing refund mechanisms",
+		},
+	}
+
+	penaltiesJSON, err := json.Marshal(penalties)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal penalties: %v", err)
+	}
+
+	return string(penaltiesJSON), nil
+}
+

@@ -2054,3 +2054,255 @@ func (p *PlatformContract) GetEscrow(
 
 	return string(escrowJSON), nil
 }
+
+// ============================================================================
+// TOKEN INTEGRATION FUNCTIONS (CFT/CFRT)
+// ============================================================================
+
+// CollectPublishingFee collects the publishing fee from startup in CFT
+// Publishing fee: 2,500 CFT (₹1,000 at 1 INR = 2.5 CFT)
+func (p *PlatformContract) CollectPublishingFee(
+	ctx contractapi.TransactionContextInterface,
+	feeID string,
+	campaignID string,
+	startupID string,
+) error {
+
+	timestamp := time.Now().Format(time.RFC3339)
+	publishingFeeCFT := 2500.0 // ₹1,000 × 2.5
+
+	// Record fee collection
+	feeRecord := FeeCollection{
+		CollectionID:  feeID,
+		CampaignID:    campaignID,
+		StartupID:     startupID,
+		FeeType:       "PUBLISHING_FEE",
+		Amount:        publishingFeeCFT,
+		GoalAmount:    0,
+		FeePercentage: 0,
+		Status:        "PENDING_TOKEN_TRANSFER",
+		CollectedAt:   timestamp,
+	}
+
+	feeJSON, err := json.Marshal(feeRecord)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fee record: %v", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(PlatformPrivateCollection, "FEE_COLLECTION_"+feeID, feeJSON)
+	if err != nil {
+		return fmt.Errorf("failed to store fee record: %v", err)
+	}
+
+	// Note: Actual CFT transfer is done via TokenContract:TransferTokens
+	// This function records the fee obligation
+	return nil
+}
+
+// CollectRegistrationFee records startup registration fee obligation
+// Registration fee: 250 CFT (₹100 at 1 INR = 2.5 CFT)
+func (p *PlatformContract) CollectRegistrationFee(
+	ctx contractapi.TransactionContextInterface,
+	feeID string,
+	startupID string,
+) error {
+
+	timestamp := time.Now().Format(time.RFC3339)
+	registrationFeeCFT := 250.0 // ₹100 × 2.5
+
+	feeRecord := FeeCollection{
+		CollectionID:  feeID,
+		CampaignID:    "",
+		StartupID:     startupID,
+		FeeType:       "REGISTRATION_FEE",
+		Amount:        registrationFeeCFT,
+		GoalAmount:    0,
+		FeePercentage: 0,
+		Status:        "PENDING_TOKEN_TRANSFER",
+		CollectedAt:   timestamp,
+	}
+
+	feeJSON, err := json.Marshal(feeRecord)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fee record: %v", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(PlatformPrivateCollection, "FEE_COLLECTION_"+feeID, feeJSON)
+	if err != nil {
+		return fmt.Errorf("failed to store fee record: %v", err)
+	}
+
+	return nil
+}
+
+// CollectCampaignCreationFee records campaign creation fee obligation
+// Creation fee: 1,250 CFT (₹500 at 1 INR = 2.5 CFT)
+func (p *PlatformContract) CollectCampaignCreationFee(
+	ctx contractapi.TransactionContextInterface,
+	feeID string,
+	campaignID string,
+	startupID string,
+) error {
+
+	timestamp := time.Now().Format(time.RFC3339)
+	creationFeeCFT := 1250.0 // ₹500 × 2.5
+
+	feeRecord := FeeCollection{
+		CollectionID:  feeID,
+		CampaignID:    campaignID,
+		StartupID:     startupID,
+		FeeType:       "CAMPAIGN_CREATION_FEE",
+		Amount:        creationFeeCFT,
+		GoalAmount:    0,
+		FeePercentage: 0,
+		Status:        "PENDING_TOKEN_TRANSFER",
+		CollectedAt:   timestamp,
+	}
+
+	feeJSON, err := json.Marshal(feeRecord)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fee record: %v", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(PlatformPrivateCollection, "FEE_COLLECTION_"+feeID, feeJSON)
+	if err != nil {
+		return fmt.Errorf("failed to store fee record: %v", err)
+	}
+
+	return nil
+}
+
+// ConfirmFeePayment confirms that a fee has been paid via token transfer
+func (p *PlatformContract) ConfirmFeePayment(
+	ctx contractapi.TransactionContextInterface,
+	feeID string,
+	transactionID string,
+) error {
+
+	feeJSON, err := ctx.GetStub().GetPrivateData(PlatformPrivateCollection, "FEE_COLLECTION_"+feeID)
+	if err != nil || feeJSON == nil {
+		return fmt.Errorf("fee record not found: %v", err)
+	}
+
+	var feeRecord FeeCollection
+	err = json.Unmarshal(feeJSON, &feeRecord)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal fee record: %v", err)
+	}
+
+	timestamp := time.Now().Format(time.RFC3339)
+	feeRecord.Status = "PAID"
+	feeRecord.CollectedAt = timestamp
+
+	feeJSON, _ = json.Marshal(feeRecord)
+	err = ctx.GetStub().PutPrivateData(PlatformPrivateCollection, "FEE_COLLECTION_"+feeID, feeJSON)
+	if err != nil {
+		return fmt.Errorf("failed to update fee record: %v", err)
+	}
+
+	// Record the transaction link
+	txLink := map[string]interface{}{
+		"feeId":         feeID,
+		"transactionId": transactionID,
+		"confirmedAt":   timestamp,
+	}
+	txLinkJSON, _ := json.Marshal(txLink)
+	ctx.GetStub().PutPrivateData(PlatformPrivateCollection, "FEE_TX_"+feeID, txLinkJSON)
+
+	return nil
+}
+
+// CollectInvestmentFee calculates and records 5% investment fee
+func (p *PlatformContract) CollectInvestmentFee(
+	ctx contractapi.TransactionContextInterface,
+	feeID string,
+	campaignID string,
+	investorID string,
+	investmentAmountCFT float64,
+) error {
+
+	timestamp := time.Now().Format(time.RFC3339)
+	feePercentage := 5.0
+	feeAmountCFT := investmentAmountCFT * (feePercentage / 100)
+
+	feeRecord := FeeCollection{
+		CollectionID:  feeID,
+		CampaignID:    campaignID,
+		StartupID:     investorID, // Using StartupID field for investor
+		FeeType:       "INVESTMENT_FEE",
+		Amount:        feeAmountCFT,
+		GoalAmount:    investmentAmountCFT,
+		FeePercentage: feePercentage,
+		Status:        "PENDING_TOKEN_TRANSFER",
+		CollectedAt:   timestamp,
+	}
+
+	feeJSON, err := json.Marshal(feeRecord)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fee record: %v", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(PlatformPrivateCollection, "FEE_COLLECTION_"+feeID, feeJSON)
+	if err != nil {
+		return fmt.Errorf("failed to store fee record: %v", err)
+	}
+
+	return nil
+}
+
+// GetFeeSchedule returns the current fee schedule in CFT
+func (p *PlatformContract) GetFeeSchedule(
+	ctx contractapi.TransactionContextInterface,
+) (string, error) {
+
+	// Fee schedule based on 1 INR = 2.5 CFT
+	feeSchedule := map[string]interface{}{
+		"exchangeRate": map[string]float64{
+			"INR": 2.5,
+			"USD": 83.0,
+		},
+		"fees": map[string]interface{}{
+			"registrationFee": map[string]interface{}{
+				"amountCFT": 250,
+				"amountINR": 100,
+				"type":      "FIXED",
+			},
+			"campaignCreationFee": map[string]interface{}{
+				"amountCFT": 1250,
+				"amountINR": 500,
+				"type":      "FIXED",
+			},
+			"campaignPublishingFee": map[string]interface{}{
+				"amountCFT": 2500,
+				"amountINR": 1000,
+				"type":      "FIXED",
+			},
+			"validationFee": map[string]interface{}{
+				"amountCFT": 500,
+				"amountINR": 200,
+				"type":      "FIXED",
+			},
+			"disputeFilingFee": map[string]interface{}{
+				"amountCFT": 750,
+				"amountINR": 300,
+				"type":      "FIXED",
+			},
+			"investmentFee": map[string]interface{}{
+				"percentage": 5.0,
+				"type":       "PERCENTAGE",
+			},
+			"withdrawalFee": map[string]interface{}{
+				"percentage": 1.0,
+				"type":       "PERCENTAGE",
+			},
+		},
+	}
+
+	scheduleJSON, err := json.Marshal(feeSchedule)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal fee schedule: %v", err)
+	}
+
+	return string(scheduleJSON), nil
+}
+

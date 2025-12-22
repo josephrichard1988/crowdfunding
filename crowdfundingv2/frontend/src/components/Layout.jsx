@@ -1,12 +1,30 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import {
     Sun, Moon, Home, Rocket, Shield, LayoutDashboard,
-    TrendingUp, Menu, X
+    TrendingUp, Menu, X, LogIn, LogOut, User, Wallet
 } from 'lucide-react';
 import { useState } from 'react';
 
-const navItems = [
+// Navigation items by role
+const roleNavItems = {
+    STARTUP: [
+        { path: '/startup', icon: Rocket, label: 'Dashboard' },
+    ],
+    INVESTOR: [
+        { path: '/investor', icon: TrendingUp, label: 'Dashboard' },
+    ],
+    VALIDATOR: [
+        { path: '/validator', icon: Shield, label: 'Dashboard' },
+    ],
+    PLATFORM: [
+        { path: '/platform', icon: LayoutDashboard, label: 'Dashboard' },
+    ]
+};
+
+// Guest navigation (can preview all dashboards)
+const guestNavItems = [
     { path: '/', icon: Home, label: 'Home' },
     { path: '/startup', icon: Rocket, label: 'Startup' },
     { path: '/validator', icon: Shield, label: 'Validator' },
@@ -16,8 +34,20 @@ const navItems = [
 
 export default function Layout() {
     const { darkMode, toggleDarkMode } = useTheme();
+    const { user, isAuthenticated, logout, role } = useAuth();
     const location = useLocation();
+    const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+    // Select nav items based on auth status
+    const navItems = isAuthenticated
+        ? [{ path: '/', icon: Home, label: 'Home' }, ...roleNavItems[role]]
+        : guestNavItems;
+
+    const handleLogout = () => {
+        logout();
+        navigate('/');
+    };
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
@@ -38,7 +68,8 @@ export default function Layout() {
                         {/* Desktop Navigation */}
                         <nav className="hidden md:flex items-center space-x-1">
                             {navItems.map(({ path, icon: Icon, label }) => {
-                                const isActive = location.pathname === path;
+                                const isActive = location.pathname === path ||
+                                    (path !== '/' && location.pathname.startsWith(path));
                                 return (
                                     <Link
                                         key={path}
@@ -57,6 +88,46 @@ export default function Layout() {
 
                         {/* Right side */}
                         <div className="flex items-center space-x-3">
+                            {/* Wallet Balance (authenticated only) */}
+                            {isAuthenticated && user?.wallet && (
+                                <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-accent-100 dark:bg-accent-900/30 rounded-lg">
+                                    <Wallet size={16} className="text-accent-600 dark:text-accent-400" />
+                                    <span className="text-sm font-medium text-accent-700 dark:text-accent-300">
+                                        {user.wallet.cftBalance?.toLocaleString() || 0} CFT
+                                    </span>
+                                </div>
+                            )}
+
+                            {/* Auth Buttons */}
+                            {isAuthenticated ? (
+                                <div className="flex items-center space-x-2">
+                                    <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                        <User size={16} className="text-gray-500" />
+                                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                            {user?.name?.split(' ')[0]}
+                                        </span>
+                                        <span className="text-xs px-1.5 py-0.5 bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300 rounded">
+                                            {role}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={handleLogout}
+                                        className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                                        title="Logout"
+                                    >
+                                        <LogOut size={20} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <Link
+                                    to="/login"
+                                    className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                                >
+                                    <LogIn size={18} />
+                                    <span className="font-medium">Login</span>
+                                </Link>
+                            )}
+
                             <button
                                 onClick={toggleDarkMode}
                                 className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -96,6 +167,16 @@ export default function Layout() {
                                 </Link>
                             );
                         })}
+                        {!isAuthenticated && (
+                            <Link
+                                to="/login"
+                                onClick={() => setMobileMenuOpen(false)}
+                                className="flex items-center space-x-3 px-4 py-3 text-primary-600 dark:text-primary-400"
+                            >
+                                <LogIn size={20} />
+                                <span className="font-medium">Login</span>
+                            </Link>
+                        )}
                     </nav>
                 )}
             </header>

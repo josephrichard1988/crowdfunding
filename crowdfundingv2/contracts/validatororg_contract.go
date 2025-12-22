@@ -1179,3 +1179,119 @@ func (v *ValidatorContract) GetValidatorDisputes(ctx contractapi.TransactionCont
 }
 
 // ============================================================================
+
+// ============================================================================
+// TOKEN INTEGRATION FUNCTIONS (CFT/CFRT)
+// ============================================================================
+
+// ValidatorFeeRecord represents fee record for validators
+type ValidatorFeeRecord struct {
+	RecordID        string  `json:"recordId"`
+	ValidatorID     string  `json:"validatorId"`
+	CampaignID      string  `json:"campaignId"`
+	FeeType         string  `json:"feeType"`
+	AmountCFT       float64 `json:"amountCFT"`
+	TransactionHash string  `json:"transactionHash"`
+	PaidAt          string  `json:"paidAt"`
+}
+
+// GetValidationFees returns the fees for validation services (paid by startups)
+func (v *ValidatorContract) GetValidationFees(
+	ctx contractapi.TransactionContextInterface,
+) (string, error) {
+
+	// Fee schedule based on 1 INR = 2.5 CFT
+	fees := map[string]interface{}{
+		"campaignValidationFee": map[string]interface{}{
+			"amountCFT":   500,
+			"amountINR":   200,
+			"description": "Standard campaign validation fee (paid by startup)",
+		},
+		"milestoneVerificationFee": map[string]interface{}{
+			"amountCFT":   125,
+			"amountINR":   50,
+			"description": "Milestone verification fee",
+		},
+		"expeditedValidationFee": map[string]interface{}{
+			"amountCFT":   1000,
+			"amountINR":   400,
+			"description": "Expedited validation (24-48 hours)",
+		},
+	}
+
+	feesJSON, err := json.Marshal(fees)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal fees: %v", err)
+	}
+
+	return string(feesJSON), nil
+}
+
+// RecordValidationFeeReceived records fee received for validation work
+func (v *ValidatorContract) RecordValidationFeeReceived(
+	ctx contractapi.TransactionContextInterface,
+	recordID string,
+	validatorID string,
+	campaignID string,
+	feeType string,
+	amountCFT float64,
+	transactionHash string,
+) error {
+
+	timestamp := time.Now().Format(time.RFC3339)
+
+	record := ValidatorFeeRecord{
+		RecordID:        recordID,
+		ValidatorID:     validatorID,
+		CampaignID:      campaignID,
+		FeeType:         feeType,
+		AmountCFT:       amountCFT,
+		TransactionHash: transactionHash,
+		PaidAt:          timestamp,
+	}
+
+	recordJSON, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("failed to marshal fee record: %v", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(ValidatorPrivateCollection, "FEE_RECEIVED_"+recordID, recordJSON)
+	if err != nil {
+		return fmt.Errorf("failed to record fee: %v", err)
+	}
+
+	return nil
+}
+
+// GetDisputePenaltySchedule returns penalty amounts for dispute scenarios
+func (v *ValidatorContract) GetDisputePenaltySchedule(
+	ctx contractapi.TransactionContextInterface,
+) (string, error) {
+
+	// Penalty schedule based on 1 INR = 2.5 CFT
+	penalties := map[string]interface{}{
+		"validatorFraudApproval": map[string]interface{}{
+			"penaltyCFT":  1250,
+			"penaltyINR":  500,
+			"description": "Approving fraudulent campaign",
+		},
+		"biasedValidation": map[string]interface{}{
+			"penaltyCFT":  625,
+			"penaltyINR":  250,
+			"description": "Biased validation (evidence of favoritism)",
+		},
+		"delayedValidation": map[string]interface{}{
+			"penaltyCFT":  250,
+			"penaltyINR":  100,
+			"description": "Validation delay beyond SLA",
+		},
+	}
+
+	penaltiesJSON, err := json.Marshal(penalties)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal penalties: %v", err)
+	}
+
+	return string(penaltiesJSON), nil
+}
+

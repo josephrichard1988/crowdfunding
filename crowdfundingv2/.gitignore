@@ -27,6 +27,7 @@ go.sum
 .DS_Store
 Thumbs.db
 desktop.ini
+*Zone.Identifier
 
 # Logs
 *.log
@@ -51,6 +52,8 @@ node_modules/
 # Environment files
 .env
 .env.local
+.env.example
+.env.template
 .env.*.local
 
 # Docker related

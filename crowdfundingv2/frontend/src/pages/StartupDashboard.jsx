@@ -1,14 +1,31 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { startupApi } from '../services/api';
-import { Plus, FileText, Share2, Bell, Loader2, RefreshCw, X, Rocket } from 'lucide-react';
+import { Plus, FileText, Share2, Bell, Loader2, RefreshCw, X, Rocket, Wallet, AlertCircle, LogIn, Coins, CreditCard, CheckCircle } from 'lucide-react';
+
+// Token fee constants (in CFT) - All paid by Startup
+const FEES = {
+    campaignCreation: 10,      // Create campaign
+    validationSubmission: 50,  // Submit to validator
+    platformPublishing: 50,    // Share to platform for publishing
+    // Total journey: 110 CFT
+};
 
 export default function StartupDashboard() {
+    const { user, isAuthenticated, updateWallet } = useAuth();
+    const navigate = useNavigate();
     const [campaigns, setCampaigns] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [creating, setCreating] = useState(false);
+
+    // Payment confirmation modal state
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [pendingAction, setPendingAction] = useState(null); // { type: 'validation' | 'publishing', campaignId, fee }
+    const [processing, setProcessing] = useState(false);
+
     const [formData, setFormData] = useState({
         campaignId: '',
         startupId: '',
@@ -22,6 +39,16 @@ export default function StartupDashboard() {
         documents: '',
     });
 
+    // Get user wallet balance
+    const cftBalance = user?.wallet?.cftBalance || 0;
+    const canCreateCampaign = cftBalance >= FEES.campaignCreation;
+    const canSubmitValidation = cftBalance >= FEES.validationSubmission;
+    const canPublish = cftBalance >= FEES.platformPublishing;
+
+    // Check if user has correct role
+    const isStartupUser = isAuthenticated && user?.role === 'STARTUP';
+    const isPreviewMode = !isAuthenticated || user?.role !== 'STARTUP';
+
     const fetchCampaigns = async () => {
         setLoading(true);
         try {
@@ -30,7 +57,7 @@ export default function StartupDashboard() {
             setError(null);
         } catch (err) {
             setCampaigns([]);
-            setError(null); // Don't show error, just empty state
+            setError(null);
             console.error(err);
         } finally {
             setLoading(false);
@@ -100,31 +127,64 @@ export default function StartupDashboard() {
         }
     };
 
-    const handleSubmitValidation = async (campaignId) => {
+    // Initiate validation with payment confirmation
+    const initiateValidationSubmit = (campaignId) => {
+        if (!canSubmitValidation) {
+            alert(`Insufficient balance. You need ${FEES.validationSubmission} CFT. Current: ${cftBalance} CFT`);
+            return;
+        }
+        setPendingAction({ type: 'validation', campaignId, fee: FEES.validationSubmission });
+        setShowPaymentModal(true);
+    };
+
+    // Initiate publishing with payment confirmation
+    const initiateShareToPlatform = (campaignId, validationHash) => {
+        if (!canPublish) {
+            alert(`Insufficient balance. You need ${FEES.platformPublishing} CFT. Current: ${cftBalance} CFT`);
+            return;
+        }
+        setPendingAction({ type: 'publishing', campaignId, validationHash, fee: FEES.platformPublishing });
+        setShowPaymentModal(true);
+    };
+
+    // Process payment and execute action
+    const confirmPayment = async () => {
+        if (!pendingAction) return;
+        setProcessing(true);
+
         try {
-            await startupApi.submitForValidation(campaignId, {
-                documents: [],
-                notes: 'Submitting for validation'
-            });
-            alert('Campaign submitted for validation!');
+            // Deduct fee from wallet
+            const newBalance = cftBalance - pendingAction.fee;
+            await updateWallet({ cftBalance: newBalance });
+
+            // Execute the actual action
+            if (pendingAction.type === 'validation') {
+                await startupApi.submitForValidation(pendingAction.campaignId, {
+                    documents: [],
+                    notes: 'Submitting for validation'
+                });
+                alert(`Payment of ${pendingAction.fee} CFT confirmed! Campaign submitted for validation.`);
+            } else if (pendingAction.type === 'publishing') {
+                await startupApi.shareToPlatform(pendingAction.campaignId, {
+                    validationHash: pendingAction.validationHash || ''
+                });
+                alert(`Payment of ${pendingAction.fee} CFT confirmed! Campaign shared to platform.`);
+            }
+
             fetchCampaigns();
         } catch (err) {
-            console.error('Failed to submit for validation:', err);
-            alert('Failed to submit: ' + err.message);
+            console.error('Failed:', err);
+            alert('Failed: ' + err.message);
+        } finally {
+            setProcessing(false);
+            setShowPaymentModal(false);
+            setPendingAction(null);
         }
     };
 
-    const handleShareToPlatform = async (campaignId, validationHash) => {
-        try {
-            await startupApi.shareToPlatform(campaignId, {
-                validationHash: validationHash || ''
-            });
-            alert('Campaign shared to platform!');
-            fetchCampaigns();
-        } catch (err) {
-            console.error('Failed to share to platform:', err);
-            alert('Failed to share: ' + err.message);
-        }
+    const cancelPayment = () => {
+        setShowPaymentModal(false);
+        setPendingAction(null);
     };
 
     const getStatusBadge = (status) => {
@@ -140,6 +200,80 @@ export default function StartupDashboard() {
 
     return (
         <div className="space-y-6">
+            {/* Payment Confirmation Modal */}
+            {showPaymentModal && pendingAction && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-accent-100 dark:bg-accent-900 rounded-full">
+                                    <CreditCard className="text-accent-600" size={24} />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                                        Confirm Payment
+                                    </h2>
+                                    <p className="text-sm text-gray-500">
+                                        {pendingAction.type === 'validation' ? 'Submit to Validator' : 'Share to Platform'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-gray-600 dark:text-gray-400">Fee</span>
+                                    <span className="text-2xl font-bold text-accent-600">{pendingAction.fee} CFT</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-500">Your Balance</span>
+                                    <span className="text-gray-700 dark:text-gray-300">{cftBalance} CFT</span>
+                                </div>
+                                <div className="flex justify-between items-center text-sm mt-1">
+                                    <span className="text-gray-500">After Payment</span>
+                                    <span className="font-medium text-green-600">{cftBalance - pendingAction.fee} CFT</span>
+                                </div>
+                            </div>
+                            <p className="text-sm text-gray-500 text-center">
+                                {pendingAction.type === 'validation'
+                                    ? 'This fee goes to the validator for reviewing your campaign.'
+                                    : 'This fee goes to the platform for publishing your campaign.'}
+                            </p>
+                        </div>
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button onClick={cancelPayment} className="btn btn-secondary">
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmPayment}
+                                disabled={processing}
+                                className="btn btn-primary flex items-center gap-2"
+                            >
+                                {processing ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle size={18} />}
+                                {processing ? 'Processing...' : 'Confirm & Pay'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Preview Mode Banner */}
+            {isPreviewMode && (
+                <div className="bg-gradient-to-r from-blue-500 to-primary-600 text-white p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <Rocket size={24} />
+                        <div>
+                            <h3 className="font-bold">Startup Dashboard Preview</h3>
+                            <p className="text-sm opacity-90">Login as a startup to create and manage campaigns</p>
+                        </div>
+                    </div>
+                    <Link to="/login" state={{ role: 'STARTUP' }} className="btn bg-white text-primary-700 hover:bg-gray-100 flex items-center gap-2">
+                        <LogIn size={18} />
+                        Login as Startup
+                    </Link>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -150,15 +284,39 @@ export default function StartupDashboard() {
                         Manage your crowdfunding campaigns
                     </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
+                    {/* Wallet Balance (authenticated only) */}
+                    {isStartupUser && (
+                        <Link to="/wallet" className="flex items-center gap-2 px-4 py-2 bg-accent-100 dark:bg-accent-900/30 text-accent-700 dark:text-accent-300 rounded-lg hover:bg-accent-200">
+                            <Coins size={18} />
+                            <span className="font-medium">{cftBalance.toLocaleString()} CFT</span>
+                        </Link>
+                    )}
                     <button onClick={fetchCampaigns} className="btn btn-secondary flex items-center gap-2">
                         <RefreshCw size={18} />
                         Refresh
                     </button>
-                    <button onClick={() => setShowCreateForm(true)} className="btn btn-primary flex items-center gap-2">
-                        <Plus size={18} />
-                        New Campaign
-                    </button>
+                    {isStartupUser ? (
+                        <button
+                            onClick={() => {
+                                if (!canCreateCampaign) {
+                                    alert(`Insufficient balance. You need ${FEES.campaignCreation} CFT to create a campaign. Current balance: ${cftBalance} CFT`);
+                                    return;
+                                }
+                                setShowCreateForm(true);
+                            }}
+                            className={`btn flex items-center gap-2 ${canCreateCampaign ? 'btn-primary' : 'bg-gray-400 cursor-not-allowed'}`}
+                        >
+                            <Plus size={18} />
+                            New Campaign
+                            {!canCreateCampaign && <AlertCircle size={14} className="ml-1" />}
+                        </button>
+                    ) : (
+                        <button disabled className="btn bg-gray-300 text-gray-500 cursor-not-allowed flex items-center gap-2">
+                            <Plus size={18} />
+                            New Campaign
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -408,19 +566,21 @@ export default function StartupDashboard() {
                                                 {/* Submit for Validation - only for DRAFT campaigns */}
                                                 {campaign.status === 'DRAFT' && !campaign.validationStatus && (
                                                     <button
-                                                        onClick={() => handleSubmitValidation(campaign.campaignId)}
-                                                        className="text-yellow-600 hover:text-yellow-800 text-sm font-medium"
+                                                        onClick={() => initiateValidationSubmit(campaign.campaignId)}
+                                                        className="text-yellow-600 hover:text-yellow-800 text-sm font-medium flex items-center gap-1"
                                                     >
-                                                        Submit Validation
+                                                        <Coins size={14} />
+                                                        Submit (50 CFT)
                                                     </button>
                                                 )}
                                                 {/* Share to Platform - only for APPROVED campaigns */}
                                                 {campaign.validationStatus === 'APPROVED' && campaign.status !== 'PUBLISHED' && (
                                                     <button
-                                                        onClick={() => handleShareToPlatform(campaign.campaignId, campaign.validationHash)}
-                                                        className="text-accent-600 hover:text-accent-800 text-sm font-medium"
+                                                        onClick={() => initiateShareToPlatform(campaign.campaignId, campaign.validationHash)}
+                                                        className="text-accent-600 hover:text-accent-800 text-sm font-medium flex items-center gap-1"
                                                     >
-                                                        Share to Platform
+                                                        <Coins size={14} />
+                                                        Publish (50 CFT)
                                                     </button>
                                                 )}
                                                 {/* Status indicator */}

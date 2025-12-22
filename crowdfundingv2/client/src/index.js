@@ -1,15 +1,21 @@
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
+import 'dotenv/config';
 import config from './settings/index.js';
+import connectDB from './database/db.js';
 
 // Import routes
 import startupRoutes from './routes/startup.routes.js';
 import validatorRoutes from './routes/validator.routes.js';
 import platformRoutes from './routes/platform.routes.js';
 import investorRoutes from './routes/investor.routes.js';
+import authRoutes from './routes/auth.routes.js';
 
 const app = express();
+
+// Connect to MongoDB
+connectDB();
 
 // Middleware
 app.use(cors());
@@ -22,6 +28,7 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/startup', startupRoutes);
 app.use('/api/validator', validatorRoutes);
 app.use('/api/platform', platformRoutes);
@@ -37,10 +44,12 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(config.port, () => {
-    console.log(`🚀 Crowdfunding API running on port ${config.port}`);
+const PORT = process.env.PORT || config.port;
+app.listen(PORT, () => {
+    console.log(`🚀 Crowdfunding API running on port ${PORT}`);
     console.log(`📡 Fabric Channel: ${config.fabric.channelName}`);
     console.log(`📦 Chaincode: ${config.fabric.chaincodeName}`);
 });
 
 export default app;
+

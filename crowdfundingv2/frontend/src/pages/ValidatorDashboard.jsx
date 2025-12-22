@@ -1,8 +1,17 @@
 import { useState, useEffect } from 'react';
 import { validatorApi } from '../services/api';
-import { Shield, CheckCircle, XCircle, Clock, Loader2, RefreshCw, FileText, AlertTriangle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
+import { Shield, CheckCircle, XCircle, Clock, Loader2, RefreshCw, FileText, AlertTriangle, LogIn, Coins } from 'lucide-react';
+
+// Token constants
+const FEES = {
+    validationFee: 500,
+    disputeFee: 750
+};
 
 export default function ValidatorDashboard() {
+    const { user, isAuthenticated } = useAuth();
     const [pendingValidations, setPendingValidations] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedCampaign, setSelectedCampaign] = useState(null);
@@ -13,6 +22,10 @@ export default function ValidatorDashboard() {
         riskLevel: 'LOW',
         comments: '',
     });
+
+    const cftBalance = user?.wallet?.cftBalance || 0;
+    const isValidatorUser = isAuthenticated && user?.role === 'VALIDATOR';
+    const isPreviewMode = !isAuthenticated || user?.role !== 'VALIDATOR';
 
     const fetchPendingValidations = async () => {
         setLoading(true);
@@ -32,6 +45,10 @@ export default function ValidatorDashboard() {
     }, []);
 
     const handleApprove = async (campaignId) => {
+        if (isPreviewMode) {
+            alert('Please login as a validator to approve campaigns');
+            return;
+        }
         setApproving(true);
         try {
             await validatorApi.approveCampaign(campaignId, {
@@ -56,6 +73,10 @@ export default function ValidatorDashboard() {
     };
 
     const handleReject = async (campaignId) => {
+        if (isPreviewMode) {
+            alert('Please login as a validator to reject campaigns');
+            return;
+        }
         setApproving(true);
         try {
             await validatorApi.approveCampaign(campaignId, {
@@ -81,6 +102,23 @@ export default function ValidatorDashboard() {
 
     return (
         <div className="space-y-6">
+            {/* Preview Mode Banner */}
+            {isPreviewMode && (
+                <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                        <Shield size={24} />
+                        <div>
+                            <h3 className="font-bold">Validator Dashboard Preview</h3>
+                            <p className="text-sm opacity-90">Login as a validator to review and validate campaigns</p>
+                        </div>
+                    </div>
+                    <Link to="/login" state={{ role: 'VALIDATOR' }} className="btn bg-white text-purple-700 hover:bg-gray-100 flex items-center gap-2">
+                        <LogIn size={18} />
+                        Login as Validator
+                    </Link>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -91,10 +129,18 @@ export default function ValidatorDashboard() {
                         Review and validate campaign submissions
                     </p>
                 </div>
-                <button onClick={fetchPendingValidations} className="btn btn-secondary flex items-center gap-2">
-                    <RefreshCw size={18} />
-                    Refresh
-                </button>
+                <div className="flex gap-3 items-center">
+                    {isValidatorUser && (
+                        <Link to="/wallet" className="flex items-center gap-2 px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-200">
+                            <Coins size={18} />
+                            <span className="font-medium">{cftBalance.toLocaleString()} CFT</span>
+                        </Link>
+                    )}
+                    <button onClick={fetchPendingValidations} className="btn btn-secondary flex items-center gap-2">
+                        <RefreshCw size={18} />
+                        Refresh
+                    </button>
+                </div>
             </div>
 
             {/* Stats */}
