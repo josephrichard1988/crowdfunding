@@ -39,9 +39,15 @@ export default function Layout() {
     const navigate = useNavigate();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-    // Select nav items based on auth status
-    const navItems = isAuthenticated
-        ? [{ path: '/', icon: Home, label: 'Home' }, ...roleNavItems[role]]
+    // Check if on auth pages (login/signup) - treat as guest view even if authenticated
+    const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+
+    // On auth pages, always show guest navigation and hide user info
+    const showAsGuest = isAuthPage || !isAuthenticated;
+
+    // Select nav items based on auth status (guest view on auth pages)
+    const navItems = !showAsGuest && role
+        ? [{ path: '/', icon: Home, label: 'Home' }, ...(roleNavItems[role] || [])]
         : guestNavItems;
 
     const handleLogout = () => {
@@ -88,8 +94,8 @@ export default function Layout() {
 
                         {/* Right side */}
                         <div className="flex items-center space-x-3">
-                            {/* Wallet Balance (authenticated only) */}
-                            {isAuthenticated && user?.wallet && (
+                            {/* Wallet Balance (only show if authenticated AND not on auth pages) */}
+                            {!showAsGuest && user?.wallet && (
                                 <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-accent-100 dark:bg-accent-900/30 rounded-lg">
                                     <Wallet size={16} className="text-accent-600 dark:text-accent-400" />
                                     <span className="text-sm font-medium text-accent-700 dark:text-accent-300">
@@ -99,7 +105,7 @@ export default function Layout() {
                             )}
 
                             {/* Auth Buttons */}
-                            {isAuthenticated ? (
+                            {!showAsGuest ? (
                                 <div className="flex items-center space-x-2">
                                     <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg">
                                         <User size={16} className="text-gray-500" />

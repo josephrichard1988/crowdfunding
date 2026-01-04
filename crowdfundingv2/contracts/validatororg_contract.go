@@ -23,7 +23,7 @@ type ValidatorContract struct {
 type ValidationRecord struct {
 	ValidationID       string              `json:"validationId"`
 	CampaignID         string              `json:"campaignId"`
-	CampaignHash       string              `json:"campaignHash"`
+	SubmissionHash     string              `json:"submissionHash"` /* Was CampaignHash */
 	ValidatorID        string              `json:"validatorId"`
 	Status             string              `json:"status"`
 	DocumentsVerified  bool                `json:"documentsVerified"`
@@ -69,7 +69,7 @@ type ValidationReport struct {
 	ReportID        string  `json:"reportId"`
 	CampaignID      string  `json:"campaignId"`
 	ValidationID    string  `json:"validationId"`
-	CampaignHash    string  `json:"campaignHash"`
+	SubmissionHash  string  `json:"submissionHash"` /* Was CampaignHash */
 	OverallScore    float64 `json:"overallScore"`
 	DocumentScore   float64 `json:"documentScore"`
 	ComplianceScore float64 `json:"complianceScore"`
@@ -82,11 +82,11 @@ type ValidationReport struct {
 
 // ValidationProof for public ledger
 type ValidationProof struct {
-	ProofID        string `json:"proofId"`
-	CampaignID     string `json:"campaignId"`
-	ValidationHash string `json:"validationHash"`
-	Status         string `json:"status"`
-	PublishedAt    string `json:"publishedAt"`
+	ProofID             string `json:"proofId"`
+	CampaignID          string `json:"campaignId"`
+	ValidationProofHash string `json:"validationProofHash"` /* Was ValidationHash */
+	Status              string `json:"status"`
+	PublishedAt         string `json:"publishedAt"`
 }
 
 // BlacklistedCampaign tracks rejected campaigns
@@ -202,7 +202,7 @@ func (v *ValidatorContract) ValidateCampaign(
 	validationID string,
 	campaignID string,
 	validatorID string,
-	campaignHash string,
+	submissionHash string, /* Was campaignHash */
 	documentsReviewedJSON string,
 ) error {
 
@@ -233,7 +233,7 @@ func (v *ValidatorContract) ValidateCampaign(
 	validation := ValidationRecord{
 		ValidationID:       validationID,
 		CampaignID:         campaignID,
-		CampaignHash:       campaignHash,
+		SubmissionHash:     submissionHash, /* Was CampaignHash */
 		ValidatorID:        validatorID,
 		Status:             "IN_PROGRESS",
 		DocumentsVerified:  false,
@@ -338,24 +338,24 @@ func (v *ValidatorContract) ApproveOrRejectCampaign(
 	}
 
 	// Generate digital signature/hash for validation approval
-	validationHash := ""
+	validationProofHash := ""
 	if status == "APPROVED" {
 		hashData := fmt.Sprintf("%s:%s:%s:%f:%f:%s", validationID, campaignID, validation.ValidatorID, dueDiligenceScore, riskScore, timestamp)
 		hash := sha256.Sum256([]byte(hashData))
-		validationHash = hex.EncodeToString(hash[:])
+		validationProofHash = hex.EncodeToString(hash[:])
 	}
 
 	// Update validation status in StartupValidatorCollection so startup can see it
 	statusUpdate := map[string]interface{}{
-		"validationId":      validationID,
-		"campaignId":        campaignID,
-		"status":            status,
-		"riskLevel":         riskLevel,
-		"dueDiligenceScore": dueDiligenceScore,
-		"riskScore":         riskScore,
-		"validationHash":    validationHash,
-		"requiredDocuments": requiredDocuments,
-		"updatedAt":         timestamp,
+		"validationId":        validationID,
+		"campaignId":          campaignID,
+		"status":              status,
+		"riskLevel":           riskLevel,
+		"dueDiligenceScore":   dueDiligenceScore,
+		"riskScore":           riskScore,
+		"validationProofHash": validationProofHash, /* Was validationHash */
+		"requiredDocuments":   requiredDocuments,
+		"updatedAt":           timestamp,
 	}
 
 	statusJSON, _ := json.Marshal(statusUpdate)
@@ -367,14 +367,14 @@ func (v *ValidatorContract) ApproveOrRejectCampaign(
 	// Store validation approval in ValidatorPlatformCollection for Platform to verify
 	if status == "APPROVED" {
 		platformVerification := map[string]interface{}{
-			"campaignId":        campaignID,
-			"validationId":      validationID,
-			"validatorId":       validation.ValidatorID,
-			"validationHash":    validationHash,
-			"dueDiligenceScore": dueDiligenceScore,
-			"riskScore":         riskScore,
-			"riskLevel":         riskLevel,
-			"approvedAt":        timestamp,
+			"campaignId":          campaignID,
+			"validationId":        validationID,
+			"validatorId":         validation.ValidatorID,
+			"validationProofHash": validationProofHash, /* Was validationHash */
+			"dueDiligenceScore":   dueDiligenceScore,
+			"riskScore":           riskScore,
+			"riskLevel":           riskLevel,
+			"approvedAt":          timestamp,
 		}
 		platformJSON, _ := json.Marshal(platformVerification)
 		err = ctx.GetStub().PutPrivateData(ValidatorPlatformCollection, "VALIDATION_APPROVAL_"+campaignID, platformJSON)
@@ -398,7 +398,7 @@ func (v *ValidatorContract) ApproveOrRejectCampaign(
 	return nil
 }
 
-// VerifyCampaignHash verifies campaign hash for integrity
+// VerifyCampaignHash verifies campaign submission hash
 func (v *ValidatorContract) VerifyCampaignHash(
 	ctx contractapi.TransactionContextInterface,
 	campaignID string,
@@ -414,9 +414,9 @@ func (v *ValidatorContract) VerifyCampaignHash(
 	var campaignData map[string]interface{}
 	json.Unmarshal(campaignJSON, &campaignData)
 
-	storedHash, ok := campaignData["validationHash"].(string)
+	storedHash, ok := campaignData["submissionHash"].(string) /* Was validationHash */
 	if !ok {
-		return false, fmt.Errorf("no validation hash found")
+		return false, fmt.Errorf("no submission hash found")
 	}
 
 	return storedHash == providedHash, nil
@@ -578,7 +578,7 @@ func (v *ValidatorContract) SendValidationReportToPlatform(
 		ReportID:        reportID,
 		CampaignID:      campaignID,
 		ValidationID:    validationID,
-		CampaignHash:    campaignHash,
+		SubmissionHash:  campaignHash, /* Was CampaignHash */
 		OverallScore:    overallScore,
 		DocumentScore:   documentScore,
 		ComplianceScore: complianceScore,
@@ -673,16 +673,16 @@ func (v *ValidatorContract) ProvideValidationDetailsToInvestor(
 
 	// Create response with validation details
 	response := map[string]interface{}{
-		"requestId":         requestID,
-		"campaignId":        campaignID,
-		"validatorId":       validationApproval["validatorId"],
-		"dueDiligenceScore": validationApproval["dueDiligenceScore"],
-		"riskScore":         validationApproval["riskScore"],
-		"riskLevel":         validationApproval["riskLevel"],
-		"validationHash":    validationApproval["validationHash"],
-		"approvedAt":        validationApproval["approvedAt"],
-		"respondedAt":       timestamp,
-		"status":            "COMPLETED",
+		"requestId":           requestID,
+		"campaignId":          campaignID,
+		"validatorId":         validationApproval["validatorId"],
+		"dueDiligenceScore":   validationApproval["dueDiligenceScore"],
+		"riskScore":           validationApproval["riskScore"],
+		"riskLevel":           validationApproval["riskLevel"],
+		"validationProofHash": validationApproval["validationProofHash"], /* Was validationHash */
+		"approvedAt":          validationApproval["approvedAt"],
+		"respondedAt":         timestamp,
+		"status":              "COMPLETED",
 	}
 
 	responseJSON, err := json.Marshal(response)
@@ -732,18 +732,18 @@ func (v *ValidatorContract) PublishValidationProof(
 	ctx contractapi.TransactionContextInterface,
 	proofID string,
 	campaignID string,
-	validationHash string,
+	validationProofHash string, /* Was validationHash */
 	status string,
 ) error {
 
 	timestamp := time.Now().Format(time.RFC3339)
 
 	proof := ValidationProof{
-		ProofID:        proofID,
-		CampaignID:     campaignID,
-		ValidationHash: validationHash,
-		Status:         status,
-		PublishedAt:    timestamp,
+		ProofID:             proofID,
+		CampaignID:          campaignID,
+		ValidationProofHash: validationProofHash, /* Was validationHash */
+		Status:              status,
+		PublishedAt:         timestamp,
 	}
 
 	proofJSON, _ := json.Marshal(proof)
@@ -1018,8 +1018,8 @@ func (v *ValidatorContract) GetCampaign(ctx contractapi.TransactionContextInterf
 	if val, ok := statusMap["status"]; ok {
 		campaignMap["validationStatus"] = val
 	}
-	if val, ok := statusMap["validationHash"]; ok {
-		campaignMap["validationHash"] = val
+	if val, ok := statusMap["validationProofHash"]; ok {
+		campaignMap["validationProofHash"] = val
 	}
 	if val, ok := statusMap["riskLevel"]; ok {
 		campaignMap["riskLevel"] = val
@@ -1294,4 +1294,3 @@ func (v *ValidatorContract) GetDisputePenaltySchedule(
 
 	return string(penaltiesJSON), nil
 }
-

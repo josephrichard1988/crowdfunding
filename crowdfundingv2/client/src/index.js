@@ -5,11 +5,7 @@ import 'dotenv/config';
 import config from './settings/index.js';
 import connectDB from './database/db.js';
 
-// Import routes
-import startupRoutes from './routes/startup.routes.js';
-import validatorRoutes from './routes/validator.routes.js';
-import platformRoutes from './routes/platform.routes.js';
-import investorRoutes from './routes/investor.routes.js';
+// Import auth routes ONLY
 import authRoutes from './routes/auth.routes.js';
 
 const app = express();
@@ -23,16 +19,16 @@ app.use(express.json());
 app.use(morgan('dev'));
 
 // Health check
-app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        service: 'Authentication Server',
+        timestamp: new Date().toISOString()
+    });
 });
 
-// API Routes
+// Auth Routes ONLY (no Fabric routes)
 app.use('/api/auth', authRoutes);
-app.use('/api/startup', startupRoutes);
-app.use('/api/validator', validatorRoutes);
-app.use('/api/platform', platformRoutes);
-app.use('/api/investor', investorRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -46,10 +42,9 @@ app.use((err, req, res, next) => {
 // Start server
 const PORT = process.env.PORT || config.port;
 app.listen(PORT, () => {
-    console.log(`🚀 Crowdfunding API running on port ${PORT}`);
-    console.log(`📡 Fabric Channel: ${config.fabric.channelName}`);
-    console.log(`📦 Chaincode: ${config.fabric.chaincodeName}`);
+    console.log(`🔐 Authentication Server running on port ${PORT}`);
+    console.log(`📊 MongoDB: Connected`);
+    console.log(`⚠️  This server handles AUTH ONLY - Fabric API is on port 4000`);
 });
 
 export default app;
-

@@ -47,22 +47,22 @@ type PublishedCampaign struct {
 	Documents         []string `json:"documents"`
 
 	// Calculated/Status Fields
-	OpenDate           string      `json:"open_date"`
-	CloseDate          string      `json:"close_date"`
-	FundsRaisedAmount  float64     `json:"funds_raised_amount"`
-	FundsRaisedPercent float64     `json:"funds_raised_percent"`
-	ValidationScore    float64     `json:"validationScore"`
-	ValidationHash     string      `json:"validationHash"`
-	ValidationVerified bool        `json:"validationVerified"`
-	RiskScore          float64     `json:"riskScore"`
-	RiskLevel          string      `json:"riskLevel"`
-	Status             string      `json:"status"`
-	InvestorCount      int         `json:"investorCount"`
-	TotalConfirmed     float64     `json:"totalConfirmed"`
-	Milestones         []Milestone `json:"milestones"`
-	AgreementIDs       []string    `json:"agreementIds"`
-	PublishedAt        string      `json:"publishedAt"`
-	UpdatedAt          string      `json:"updatedAt"`
+	OpenDate            string      `json:"open_date"`
+	CloseDate           string      `json:"close_date"`
+	FundsRaisedAmount   float64     `json:"funds_raised_amount"`
+	FundsRaisedPercent  float64     `json:"funds_raised_percent"`
+	ValidationScore     float64     `json:"validationScore"`
+	ValidationProofHash string      `json:"validationProofHash"` /* Was ValidationHash */
+	ValidationVerified  bool        `json:"validationVerified"`
+	RiskScore           float64     `json:"riskScore"`
+	RiskLevel           string      `json:"riskLevel"`
+	Status              string      `json:"status"`
+	InvestorCount       int         `json:"investorCount"`
+	TotalConfirmed      float64     `json:"totalConfirmed"`
+	Milestones          []Milestone `json:"milestones"`
+	AgreementIDs        []string    `json:"agreementIds"`
+	PublishedAt         string      `json:"publishedAt"`
+	UpdatedAt           string      `json:"updatedAt"`
 }
 
 // Agreement represents investment agreement
@@ -95,14 +95,14 @@ type InvestorConfirmationRecord struct {
 
 // ValidatorDecisionRecord represents recorded validator decision
 type ValidatorDecisionRecord struct {
-	RecordID     string  `json:"recordId"`
-	CampaignID   string  `json:"campaignId"`
-	ValidationID string  `json:"validationId"`
-	CampaignHash string  `json:"campaignHash"`
-	Approved     bool    `json:"approved"`
-	OverallScore float64 `json:"overallScore"`
-	ReportHash   string  `json:"reportHash"`
-	RecordedAt   string  `json:"recordedAt"`
+	RecordID       string  `json:"recordId"`
+	CampaignID     string  `json:"campaignId"`
+	ValidationID   string  `json:"validationId"`
+	SubmissionHash string  `json:"submissionHash"` /* Was CampaignHash */
+	Approved       bool    `json:"approved"`
+	OverallScore   float64 `json:"overallScore"`
+	ReportHash     string  `json:"reportHash"`
+	RecordedAt     string  `json:"recordedAt"`
 }
 
 // FundRelease represents fund release to startup
@@ -333,7 +333,7 @@ func (p *PlatformContract) InitLedger(ctx contractapi.TransactionContextInterfac
 func (p *PlatformContract) PublishCampaignToPortal(
 	ctx contractapi.TransactionContextInterface,
 	campaignID string,
-	validationHash string,
+	validationProofHash string, /* Was validationHash */
 ) error {
 
 	// Step 1: Read campaign data from StartupPlatformCollection
@@ -361,14 +361,14 @@ func (p *PlatformContract) PublishCampaignToPortal(
 	}
 
 	// Step 3: Verify hash matches
-	validatorHash, ok := validationApproval["validationHash"].(string)
-	if !ok || validatorHash != validationHash {
-		return fmt.Errorf("validation hash mismatch. Platform verification failed. Expected: %s, Received: %s", validatorHash, validationHash)
+	validatorHash, ok := validationApproval["validationProofHash"].(string) /* Was validationHash */
+	if !ok || validatorHash != validationProofHash {
+		return fmt.Errorf("validation proof hash mismatch. Platform verification failed. Expected: %s, Received: %s", validatorHash, validationProofHash)
 	}
 
-	campaignHash, ok := campaignData["validationHash"].(string)
-	if !ok || campaignHash != validationHash {
-		return fmt.Errorf("campaign validation hash mismatch. Cannot publish")
+	campaignHash, ok := campaignData["validationProofHash"].(string) /* Was validationHash */
+	if !ok || campaignHash != validationProofHash {
+		return fmt.Errorf("campaign validation proof hash mismatch. Cannot publish")
 	}
 
 	// Check if already published
@@ -435,41 +435,41 @@ func (p *PlatformContract) PublishCampaignToPortal(
 
 	// Create published campaign
 	campaign := PublishedCampaign{
-		CampaignID:         campaignID,
-		StartupID:          startupID,
-		Category:           category,
-		Deadline:           deadline,
-		Currency:           currency,
-		HasRaised:          hasRaised,
-		HasGovGrants:       hasGovGrants,
-		IncorpDate:         incorpDate,
-		ProjectStage:       projectStage,
-		Sector:             sector,
-		Tags:               tags,
-		TeamAvailable:      teamAvailable,
-		InvestorCommitted:  investorCommitted,
-		Duration:           duration,
-		FundingDay:         fundingDay,
-		FundingMonth:       fundingMonth,
-		FundingYear:        fundingYear,
-		GoalAmount:         goalAmount,
-		InvestmentRange:    investmentRange,
-		ProjectName:        projectName,
-		Description:        description,
-		Documents:          documents,
-		OpenDate:           openDate,
-		CloseDate:          deadline,
-		ValidationScore:    validationScore,
-		ValidationHash:     validationHash,
-		ValidationVerified: true,
-		RiskScore:          riskScore,
-		RiskLevel:          riskLevel,
-		FundsRaisedAmount:  0,
-		FundsRaisedPercent: 0,
-		InvestorCount:      0,
-		Status:             "PUBLISHED",
-		PublishedAt:        timestamp,
-		Milestones:         []Milestone{},
+		CampaignID:          campaignID,
+		StartupID:           startupID,
+		Category:            category,
+		Deadline:            deadline,
+		Currency:            currency,
+		HasRaised:           hasRaised,
+		HasGovGrants:        hasGovGrants,
+		IncorpDate:          incorpDate,
+		ProjectStage:        projectStage,
+		Sector:              sector,
+		Tags:                tags,
+		TeamAvailable:       teamAvailable,
+		InvestorCommitted:   investorCommitted,
+		Duration:            duration,
+		FundingDay:          fundingDay,
+		FundingMonth:        fundingMonth,
+		FundingYear:         fundingYear,
+		GoalAmount:          goalAmount,
+		InvestmentRange:     investmentRange,
+		ProjectName:         projectName,
+		Description:         description,
+		Documents:           documents,
+		OpenDate:            openDate,
+		CloseDate:           deadline,
+		ValidationScore:     validationScore,
+		ValidationProofHash: validationProofHash, /* Was ValidationHash */
+		ValidationVerified:  true,
+		RiskScore:           riskScore,
+		RiskLevel:           riskLevel,
+		FundsRaisedAmount:   0,
+		FundsRaisedPercent:  0,
+		InvestorCount:       0,
+		Status:              "PUBLISHED",
+		PublishedAt:         timestamp,
+		Milestones:          []Milestone{},
 	}
 
 	campaignJSON, err := json.Marshal(campaign)
@@ -523,7 +523,7 @@ func (p *PlatformContract) PublishCampaignToPortal(
 func (p *PlatformContract) VerifyAndPublish(
 	ctx contractapi.TransactionContextInterface,
 	campaignID string,
-	validationHash string,
+	validationProofHash string, /* Was validationHash */
 ) error {
 
 	// Get validation report from ValidatorPlatformCollection
@@ -537,8 +537,8 @@ func (p *PlatformContract) VerifyAndPublish(
 	json.Unmarshal(reportJSON, &report)
 
 	// Verify hash
-	if report["campaignHash"].(string) != validationHash {
-		return fmt.Errorf("validation hash mismatch")
+	if report["submissionHash"].(string) != validationProofHash {
+		return fmt.Errorf("validation proof hash mismatch")
 	}
 
 	// Get campaign
@@ -799,7 +799,7 @@ func (p *PlatformContract) RecordValidatorDecision(
 	recordID string,
 	campaignID string,
 	validationID string,
-	campaignHash string,
+	submissionHash string, /* Was campaignHash */
 	approved bool,
 	overallScore float64,
 	reportHash string,
@@ -808,14 +808,14 @@ func (p *PlatformContract) RecordValidatorDecision(
 	timestamp := time.Now().Format(time.RFC3339)
 
 	record := ValidatorDecisionRecord{
-		RecordID:     recordID,
-		CampaignID:   campaignID,
-		ValidationID: validationID,
-		CampaignHash: campaignHash,
-		Approved:     approved,
-		OverallScore: overallScore,
-		ReportHash:   reportHash,
-		RecordedAt:   timestamp,
+		RecordID:       recordID,
+		CampaignID:     campaignID,
+		ValidationID:   validationID,
+		SubmissionHash: submissionHash, /* Was CampaignHash */
+		Approved:       approved,
+		OverallScore:   overallScore,
+		ReportHash:     reportHash,
+		RecordedAt:     timestamp,
 	}
 
 	recordJSON, err := json.Marshal(record)
@@ -2305,4 +2305,3 @@ func (p *PlatformContract) GetFeeSchedule(
 
 	return string(scheduleJSON), nil
 }
-

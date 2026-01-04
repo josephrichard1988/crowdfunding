@@ -33,9 +33,13 @@ export default function StartupCampaignDetails() {
     const handleSubmitForValidation = async () => {
         try {
             setSubmitting(true);
+            const authToken = sessionStorage.getItem('token') || localStorage.getItem('token');
             await startupApi.submitForValidation(campaignId, {
                 documents: campaign.documents || [],
-                notes: submitNotes || 'Please validate this campaign'
+                notes: submitNotes || 'Please validate this campaign',
+                authToken,
+                startupId: campaign.startupId,
+                projectName: campaign.projectName || campaign.project_name
             });
             alert('Campaign submitted for validation!');
             setShowSubmitModal(false);
@@ -52,8 +56,12 @@ export default function StartupCampaignDetails() {
     const handleShareToPlatform = async () => {
         try {
             setSubmitting(true);
+            const authToken = sessionStorage.getItem('token') || localStorage.getItem('token');
             await startupApi.shareToPlatform(campaignId, {
-                validationHash: campaign.validationHash || ''
+                validationProofHash: campaign.validationProofHash || '',
+                authToken,
+                startupId: campaign.startupId,
+                projectName: campaign.projectName || campaign.project_name
             });
             alert('Campaign shared to platform for publishing!');
             fetchCampaign(); // Refresh data
@@ -196,16 +204,7 @@ export default function StartupCampaignDetails() {
                             Submit for Validation
                         </button>
                     )}
-                    {canShareToPlatform && (
-                        <button
-                            onClick={handleShareToPlatform}
-                            className="btn btn-accent flex items-center gap-2"
-                            disabled={submitting}
-                        >
-                            {submitting ? <Loader2 className="animate-spin" size={18} /> : <Share2 size={18} />}
-                            Share to Platform
-                        </button>
-                    )}
+
                     {campaign.validationStatus === 'PENDING_VALIDATION' && (
                         <span className="px-4 py-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg text-sm flex items-center gap-2">
                             <Loader2 className="animate-spin" size={16} />
@@ -291,7 +290,7 @@ export default function StartupCampaignDetails() {
                         <div className="flex justify-between text-sm mb-1">
                             <span className="text-gray-500">Progress</span>
                             <span className="font-medium text-gray-900 dark:text-white">
-                                {campaign.fundsRaisedPercent || campaign.funds_raised_percent || 0}%
+                                {parseFloat(campaign.fundsRaisedPercent || campaign.funds_raised_percent || 0).toFixed(2)}%
                             </span>
                         </div>
                         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -330,11 +329,11 @@ export default function StartupCampaignDetails() {
                                     }`}>{campaign.riskLevel}</span>
                             </div>
                         )}
-                        {campaign.validationHash && (
+                        {campaign.validationProofHash && (
                             <div className="flex justify-between">
-                                <span className="text-gray-500">Validation Hash</span>
-                                <span className="font-mono text-xs text-gray-600 dark:text-gray-400 truncate max-w-[150px]" title={campaign.validationHash}>
-                                    {campaign.validationHash.substring(0, 20)}...
+                                <span className="text-gray-500">Validation Proof Hash</span>
+                                <span className="font-mono text-xs text-gray-600 dark:text-gray-400 truncate max-w-[150px]" title={campaign.validationProofHash}>
+                                    {campaign.validationProofHash.substring(0, 20)}...
                                 </span>
                             </div>
                         )}

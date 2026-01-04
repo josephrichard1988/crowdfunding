@@ -4,9 +4,24 @@ const AuthContext = createContext(null);
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+// ============================================================================
+// STORAGE TOGGLE - Set to true for per-tab sessions (multi-user testing)
+// Set to false for shared sessions across tabs (production behavior)
+// TODO: Remove this toggle when no longer needed for testing
+// ============================================================================
+const USE_SESSION_STORAGE = true;  // Change to false for production
+
+// Helper functions for storage (easy to remove later - just replace with localStorage)
+const storage = {
+    getItem: (key) => USE_SESSION_STORAGE ? sessionStorage.getItem(key) : localStorage.getItem(key),
+    setItem: (key, value) => USE_SESSION_STORAGE ? sessionStorage.setItem(key, value) : localStorage.setItem(key, value),
+    removeItem: (key) => USE_SESSION_STORAGE ? sessionStorage.removeItem(key) : localStorage.removeItem(key),
+};
+// ============================================================================
+
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
-    const [token, setToken] = useState(localStorage.getItem('token'));
+    const [token, setToken] = useState(storage.getItem('token'));
     const [loading, setLoading] = useState(true);
 
     // Check auth status on mount
@@ -53,7 +68,7 @@ export function AuthProvider({ children }) {
             throw new Error(data.error || 'Login failed');
         }
 
-        localStorage.setItem('token', data.token);
+        storage.setItem('token', data.token);
         setToken(data.token);
         setUser(data.user);
 
@@ -73,7 +88,7 @@ export function AuthProvider({ children }) {
             throw new Error(data.error || 'Signup failed');
         }
 
-        localStorage.setItem('token', data.token);
+        storage.setItem('token', data.token);
         setToken(data.token);
         setUser(data.user);
 
@@ -81,7 +96,7 @@ export function AuthProvider({ children }) {
     };
 
     const logout = () => {
-        localStorage.removeItem('token');
+        storage.removeItem('token');
         setToken(null);
         setUser(null);
     };

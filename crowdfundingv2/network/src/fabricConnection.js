@@ -50,11 +50,15 @@ class FabricConnection {
                 wallet,
                 identity: org.adminUser,
                 // Enable discovery - required for finding peers
-                // asLocalhost: false is critical for microfab's external URLs
-                discovery: { enabled: true, asLocalhost: false },
+                // asLocalhost: true translates discovered .nip.io URLs to localhost for WSL/MicroFab
+                discovery: { enabled: true, asLocalhost: true },
                 eventHandlerOptions: {
                     commitTimeout: 300,
-                    endorseTimeout: 300
+                    endorseTimeout: 300,
+                    // Use MSPID scope: limits commit event listening to peers from endorsing orgs only
+                    // This prevents ENDORSEMENT_POLICY_FAILURE when using PDC (Private Data Collections)
+                    // because non-member orgs can't validate the commit
+                    strategy: require('fabric-network').DefaultEventHandlerStrategies.MSPID_SCOPE_ANYFORTX
                 }
             });
 

@@ -22,12 +22,15 @@ export default function InvestorDashboard() {
     const isPreviewMode = !isAuthenticated || user?.role !== 'INVESTOR';
 
     const fetchData = async () => {
+        if (!isInvestorUser) return;
+
         setLoading(true);
         try {
+            const investorId = user?.orgUserId;
             const [campaignsRes, investmentsRes, viewedRes] = await Promise.all([
-                investorApi.getAvailableCampaigns(),
-                investorApi.getMyInvestments().catch(() => ({ data: { data: [] } })),
-                investorApi.getViewedCampaigns().catch(() => ({ data: { data: [] } }))
+                investorApi.getAvailableCampaigns().catch(() => ({ data: { data: [] } })),
+                investorApi.getMyInvestments(investorId).catch(() => ({ data: { data: [] } })),
+                investorApi.getViewedCampaigns(investorId).catch(() => ({ data: { data: [] } }))
             ]);
             setCampaigns(campaignsRes.data?.data || []);
             setInvestments(investmentsRes.data?.data || []);
@@ -41,8 +44,12 @@ export default function InvestorDashboard() {
     };
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        if (isInvestorUser) {
+            fetchData();
+        } else {
+            setLoading(false);
+        }
+    }, [isInvestorUser, user?.orgUserId]);  // Re-fetch when user changes
 
     const totalInvested = investments.reduce((sum, inv) => sum + (inv.amount || 0), 0);
 

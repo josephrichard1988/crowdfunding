@@ -113,7 +113,7 @@ export default function CampaignDetails() {
                             )}
                         </div>
                         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
-                            {campaign.projectName || campaign.project_name || 'Untitled Campaign'}
+                            {campaign.projectName || campaign.ProjectName || campaign.project_name || campaign.name || 'Untitled Campaign'}
                         </h1>
                         <p className="text-gray-600 dark:text-gray-400 mb-4">
                             by {campaign.startupId}
@@ -140,6 +140,7 @@ export default function CampaignDetails() {
                                     value={investAmount}
                                     onChange={(e) => setInvestAmount(e.target.value)}
                                     placeholder="Enter amount"
+                                    min="0"
                                     className="input"
                                 />
                             </div>
@@ -176,6 +177,22 @@ export default function CampaignDetails() {
                             <dt className="text-gray-500">Validation Score</dt>
                             <dd className="text-gray-900 dark:text-white font-medium">{campaign.validationScore || 'N/A'}</dd>
                         </div>
+                        {campaign.submissionHash && (
+                            <div className="flex flex-col mt-2">
+                                <dt className="text-gray-500 text-xs uppercase tracking-wider mb-1">Submission Hash (Integrity)</dt>
+                                <dd className="text-gray-900 dark:text-white font-mono text-xs break-all bg-gray-100 dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700">
+                                    {campaign.submissionHash}
+                                </dd>
+                            </div>
+                        )}
+                        {campaign.validationProofHash && (
+                            <div className="flex flex-col mt-2">
+                                <dt className="text-gray-500 text-xs uppercase tracking-wider mb-1">Validation Proof (Signature)</dt>
+                                <dd className="text-green-900 dark:text-green-300 font-mono text-xs break-all bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-800">
+                                    {campaign.validationProofHash}
+                                </dd>
+                            </div>
+                        )}
                     </dl>
                 </div>
 

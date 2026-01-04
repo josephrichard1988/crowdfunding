@@ -93,8 +93,8 @@ export default function Signup() {
                                     type="button"
                                     onClick={() => setSelectedRole(id)}
                                     className={`relative p-4 rounded-xl border-2 transition-all text-left ${selectedRole === id
-                                            ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-                                            : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                                        ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                                         }`}
                                 >
                                     {selectedRole === id && (

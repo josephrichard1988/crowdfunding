@@ -9,6 +9,7 @@ import Login from './pages/Login';
 import Signup from './pages/Signup';
 import Wallet from './pages/Wallet';
 import StartupDashboard from './pages/StartupDashboard';
+import StartupDetail from './pages/StartupDetail';
 import StartupCampaignDetails from './pages/StartupCampaignDetails';
 import ValidatorDashboard from './pages/ValidatorDashboard';
 import PlatformDashboard from './pages/PlatformDashboard';
@@ -33,8 +34,13 @@ function App() {
                             </ProtectedRoute>
                         } />
 
-                        {/* Dashboard routes - accessible as preview for guests, full for auth users */}
+                        {/* Startup routes */}
                         <Route path="startup" element={<StartupDashboard />} />
+                        <Route path="startup/:startupId" element={
+                            <RoleGuard allowedRoles={['STARTUP']}>
+                                <StartupDetail />
+                            </RoleGuard>
+                        } />
                         <Route path="startup/campaign/:campaignId" element={
                             <RoleGuard allowedRoles={['STARTUP']}>
                                 <StartupCampaignDetails />

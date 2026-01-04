@@ -30,6 +30,41 @@ export default function WalletDashboard() {
     const [transactions, setTransactions] = useState([]);
     const [activeTab, setActiveTab] = useState('overview');
 
+    // Payment Gateway State
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentStep, setPaymentStep] = useState('card'); // 'card' | 'otp' | 'processing' | 'success'
+    const [cardDetails, setCardDetails] = useState({
+        number: '',
+        expiry: '',
+        cvv: '',
+        name: ''
+    });
+    const [otp, setOtp] = useState('');
+    const [generatedOtp, setGeneratedOtp] = useState('');
+
+    // CFT Supply (from Platform)
+    const [availableCft, setAvailableCft] = useState(0);
+    const MAX_PURCHASE_CFT = 5000000; // 50,00,000
+    const MIN_PURCHASE_CFT = 1;
+
+    // Fetch available CFT supply on mount
+    useEffect(() => {
+        const fetchSupply = async () => {
+            try {
+                const res = await fetch(`${API_URL}/auth/cft-supply`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setAvailableCft(data.availableCft || 0);
+                }
+            } catch (e) {
+                console.warn('Failed to fetch CFT supply');
+            }
+        };
+        if (token) fetchSupply();
+    }, [token]);
+
     // Exchange rates (from API or constants)
     const exchangeRates = {
         INR: 2.5,
@@ -43,18 +78,104 @@ export default function WalletDashboard() {
 
     const wallet = user?.wallet || { cftBalance: 0, cfrtBalance: 0, frozenCft: 0 };
 
-    const handlePurchase = async () => {
-        if (!purchaseAmount || parseFloat(purchaseAmount) <= 0) return;
 
+    // Calculate CFT from fiat amount
+    const calculateCft = (amount) => {
+        if (!amount || parseFloat(amount) <= 0) return 0;
+        return parseFloat(amount) * exchangeRates[purchaseCurrency];
+    };
+
+    // Initiate purchase - opens payment modal
+    const initiatePurchase = () => {
+        const fiatAmount = parseFloat(purchaseAmount);
+        if (!purchaseAmount || fiatAmount <= 0) {
+            alert('Please enter a valid amount');
+            return;
+        }
+
+        const cftAmount = calculateCft(purchaseAmount);
+
+        // Validate minimum
+        if (cftAmount < MIN_PURCHASE_CFT) {
+            alert(`Minimum purchase is ${MIN_PURCHASE_CFT} CFT`);
+            return;
+        }
+
+        // Validate maximum
+        if (cftAmount > MAX_PURCHASE_CFT) {
+            alert(`Maximum purchase is ${MAX_PURCHASE_CFT.toLocaleString()} CFT per transaction`);
+            return;
+        }
+
+        // Validate against available supply
+        if (cftAmount > availableCft) {
+            alert(`Only ${availableCft.toLocaleString()} CFT available. Platform admin needs to setup more CFT.`);
+            return;
+        }
+
+        // Open payment modal
+        setPaymentStep('card');
+        setCardDetails({ number: '', expiry: '', cvv: '', name: '' });
+        setOtp('');
+        setShowPaymentModal(true);
+    };
+
+    // Process card and send OTP
+    const processCardAndSendOtp = () => {
+        // Basic card validation
+        if (!cardDetails.number || cardDetails.number.length < 16 ||
+            !cardDetails.expiry || !cardDetails.cvv || cardDetails.cvv.length < 3 ||
+            !cardDetails.name) {
+            alert('Please fill all card details correctly');
+            return;
+        }
+
+        // Generate fake OTP
+        const fakeOtp = String(Math.floor(100000 + Math.random() * 900000));
+        setGeneratedOtp(fakeOtp);
+
+        // Simulate sending OTP (show in console for demo)
+        console.log('=== DEMO OTP ===', fakeOtp);
+        alert(`OTP sent to your registered mobile! (Demo OTP: ${fakeOtp})`);
+
+        setPaymentStep('otp');
+    };
+
+    // Verify OTP and complete purchase
+    const verifyOtpAndPurchase = async () => {
+        if (otp !== generatedOtp) {
+            alert('Invalid OTP. Please try again.');
+            return;
+        }
+
+        setPaymentStep('processing');
         setLoading(true);
-        try {
-            const cftAmount = parseFloat(purchaseAmount) * exchangeRates[purchaseCurrency];
 
-            // In real app: call chaincode TokenContract:PurchaseTokens
-            // For now, simulate by updating local wallet
+        try {
+            // Simulate processing delay
+            await new Promise(resolve => setTimeout(resolve, 2500));
+
+            const cftAmount = calculateCft(purchaseAmount);
+
+            // Update wallet
             await updateWallet({
                 cftBalance: wallet.cftBalance + cftAmount
             });
+
+            // Update available supply (call backend)
+            try {
+                await fetch(`${API_URL}/auth/cft-supply/deduct`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ amount: cftAmount })
+                });
+                setAvailableCft(prev => prev - cftAmount);
+            } catch (e) {
+                console.warn('Failed to update supply on backend');
+            }
 
             // Add to transaction history
             setTransactions(prev => [{
@@ -68,11 +189,19 @@ export default function WalletDashboard() {
                 status: 'COMPLETED'
             }, ...prev]);
 
+            setPaymentStep('success');
             setPurchaseAmount('');
-            alert(`Successfully purchased ${cftAmount.toFixed(2)} CFT!`);
+
+            // Auto close after 2 seconds
+            setTimeout(() => {
+                setShowPaymentModal(false);
+                setPaymentStep('card');
+            }, 2000);
+
         } catch (error) {
             console.error('Purchase failed:', error);
             alert('Purchase failed: ' + error.message);
+            setShowPaymentModal(false);
         } finally {
             setLoading(false);
         }
@@ -261,7 +390,7 @@ export default function WalletDashboard() {
                                         {key.replace(/([A-Z])/g, ' $1').replace('Fee', '')}
                                     </span>
                                     <span className="font-medium text-gray-900 dark:text-white">
-                                        {typeof value === 'number' && value < 100 ? `${value}%` : `${value} CFT`}
+                                        {key.includes('Percent') ? `${value}%` : `${value} CFT`}
                                     </span>
                                 </div>
                             ))}
@@ -280,17 +409,36 @@ export default function WalletDashboard() {
                             <CreditCard className="text-primary-500" />
                             Purchase CFT Tokens
                         </h3>
+
+                        {/* Available Supply Info */}
+                        <div className="p-3 bg-green-50 dark:bg-green-900/30 rounded-lg flex justify-between items-center">
+                            <span className="text-sm text-green-700 dark:text-green-300">Available CFT Supply:</span>
+                            <span className="font-bold text-green-700 dark:text-green-300">
+                                {availableCft > 0 ? availableCft.toLocaleString() : 'Not Setup'} CFT
+                            </span>
+                        </div>
+
+                        {availableCft === 0 && (
+                            <div className="p-3 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg flex items-start gap-2">
+                                <AlertCircle size={18} className="text-yellow-600 mt-0.5" />
+                                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                                    CFT purchase is not available. Platform admin needs to setup the CFT supply first.
+                                </p>
+                            </div>
+                        )}
+
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Amount
+                                    Amount (Min: {(MIN_PURCHASE_CFT / exchangeRates[purchaseCurrency]).toFixed(2)} | Max: {(MAX_PURCHASE_CFT / exchangeRates[purchaseCurrency]).toLocaleString()} {purchaseCurrency})
                                 </label>
                                 <div className="flex gap-2">
                                     <input
                                         type="number"
                                         value={purchaseAmount}
-                                        onChange={(e) => setPurchaseAmount(e.target.value)}
+                                        onChange={(e) => setPurchaseAmount(Math.max(0, e.target.value))}
                                         placeholder="Enter amount"
+                                        min="1"
                                         className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
                                     />
                                     <select
@@ -303,21 +451,21 @@ export default function WalletDashboard() {
                                     </select>
                                 </div>
                             </div>
-                            {purchaseAmount && (
+                            {purchaseAmount && parseFloat(purchaseAmount) > 0 && (
                                 <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                                     <p className="text-sm text-gray-600 dark:text-gray-400">You will receive:</p>
                                     <p className="text-2xl font-bold text-primary-600">
-                                        {(parseFloat(purchaseAmount) * exchangeRates[purchaseCurrency]).toFixed(2)} CFT
+                                        {calculateCft(purchaseAmount).toLocaleString(undefined, { maximumFractionDigits: 2 })} CFT
                                     </p>
                                 </div>
                             )}
                             <button
-                                onClick={handlePurchase}
-                                disabled={loading || !purchaseAmount}
-                                className="w-full btn btn-primary flex items-center justify-center gap-2"
+                                onClick={initiatePurchase}
+                                disabled={loading || !purchaseAmount || availableCft === 0}
+                                className="w-full btn btn-primary flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {loading ? <Loader2 className="animate-spin" size={18} /> : <ArrowUpRight size={18} />}
-                                Purchase CFT
+                                {availableCft === 0 ? 'CFT Not Available' : 'Purchase CFT'}
                             </button>
                         </div>
                     </div>
@@ -345,6 +493,7 @@ export default function WalletDashboard() {
                                     value={withdrawAmount}
                                     onChange={(e) => setWithdrawAmount(e.target.value)}
                                     placeholder="Enter CFT amount"
+                                    min="0"
                                     max={wallet.cftBalance}
                                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
                                 />
@@ -395,6 +544,7 @@ export default function WalletDashboard() {
                                     value={redeemAmount}
                                     onChange={(e) => setRedeemAmount(e.target.value)}
                                     placeholder="Enter CFRT amount"
+                                    min="0"
                                     max={wallet.cfrtBalance}
                                     className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800"
                                 />
@@ -468,6 +618,151 @@ export default function WalletDashboard() {
                     </div>
                 )}
             </div>
+
+            {/* Payment Gateway Modal */}
+            {showPaymentModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
+                        {/* Header */}
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                                {paymentStep === 'card' && '💳 Enter Card Details'}
+                                {paymentStep === 'otp' && '🔐 OTP Verification'}
+                                {paymentStep === 'processing' && '⏳ Processing...'}
+                                {paymentStep === 'success' && '✅ Success!'}
+                            </h3>
+                            {paymentStep !== 'processing' && paymentStep !== 'success' && (
+                                <button
+                                    onClick={() => setShowPaymentModal(false)}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-6 space-y-4">
+                            {/* Purchase Summary */}
+                            <div className="p-3 bg-primary-50 dark:bg-primary-900/30 rounded-lg text-center">
+                                <p className="text-sm text-primary-700 dark:text-primary-300">Amount to Pay</p>
+                                <p className="text-2xl font-bold text-primary-600">
+                                    {purchaseAmount} {purchaseCurrency}
+                                </p>
+                                <p className="text-xs text-primary-500">
+                                    = {calculateCft(purchaseAmount).toLocaleString()} CFT
+                                </p>
+                            </div>
+
+                            {/* Card Form */}
+                            {paymentStep === 'card' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Card Number</label>
+                                        <input
+                                            type="text"
+                                            value={cardDetails.number}
+                                            onChange={(e) => setCardDetails(prev => ({ ...prev, number: e.target.value.replace(/\D/g, '').slice(0, 16) }))}
+                                            placeholder="1234 5678 9012 3456"
+                                            className="w-full px-4 py-2 border rounded-lg"
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">Expiry (MM/YY)</label>
+                                            <input
+                                                type="text"
+                                                value={cardDetails.expiry}
+                                                onChange={(e) => setCardDetails(prev => ({ ...prev, expiry: e.target.value.slice(0, 5) }))}
+                                                placeholder="12/25"
+                                                className="w-full px-4 py-2 border rounded-lg"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium mb-1">CVV</label>
+                                            <input
+                                                type="password"
+                                                value={cardDetails.cvv}
+                                                onChange={(e) => setCardDetails(prev => ({ ...prev, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) }))}
+                                                placeholder="123"
+                                                className="w-full px-4 py-2 border rounded-lg"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium mb-1">Cardholder Name</label>
+                                        <input
+                                            type="text"
+                                            value={cardDetails.name}
+                                            onChange={(e) => setCardDetails(prev => ({ ...prev, name: e.target.value }))}
+                                            placeholder="John Doe"
+                                            className="w-full px-4 py-2 border rounded-lg"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={processCardAndSendOtp}
+                                        className="w-full btn btn-primary py-3"
+                                    >
+                                        Continue to OTP →
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* OTP Form */}
+                            {paymentStep === 'otp' && (
+                                <div className="space-y-4 text-center">
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                        Enter the 6-digit OTP sent to your registered mobile
+                                    </p>
+                                    <input
+                                        type="text"
+                                        value={otp}
+                                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                        placeholder="000000"
+                                        className="w-full px-4 py-3 text-center text-2xl tracking-widest border rounded-lg"
+                                        maxLength={6}
+                                    />
+                                    <button
+                                        onClick={verifyOtpAndPurchase}
+                                        disabled={otp.length !== 6}
+                                        className="w-full btn btn-primary py-3 disabled:opacity-50"
+                                    >
+                                        Verify & Pay
+                                    </button>
+                                    <button
+                                        onClick={() => setPaymentStep('card')}
+                                        className="text-sm text-gray-500 hover:text-gray-700"
+                                    >
+                                        ← Back to Card Details
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Processing */}
+                            {paymentStep === 'processing' && (
+                                <div className="text-center py-8">
+                                    <Loader2 size={48} className="animate-spin mx-auto text-primary-500 mb-4" />
+                                    <p className="text-gray-600">Processing your payment...</p>
+                                    <p className="text-sm text-gray-400 mt-2">Please do not close this window</p>
+                                </div>
+                            )}
+
+                            {/* Success */}
+                            {paymentStep === 'success' && (
+                                <div className="text-center py-8">
+                                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <TrendingUp size={32} className="text-green-600" />
+                                    </div>
+                                    <p className="text-xl font-bold text-green-600 mb-2">Payment Successful!</p>
+                                    <p className="text-gray-600">
+                                        {calculateCft(purchaseAmount).toLocaleString()} CFT added to your wallet
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

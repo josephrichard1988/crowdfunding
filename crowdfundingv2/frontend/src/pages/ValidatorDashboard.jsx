@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { validatorApi } from '../services/api';
+import { validatorApi, queueApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
-import { Shield, CheckCircle, XCircle, Clock, Loader2, RefreshCw, FileText, AlertTriangle, LogIn, Coins } from 'lucide-react';
+import { Shield, CheckCircle, XCircle, Clock, Loader2, RefreshCw, FileText, AlertTriangle, LogIn, Coins, ListChecks, History } from 'lucide-react';
 
 // Token constants
 const FEES = {
@@ -13,6 +13,8 @@ const FEES = {
 export default function ValidatorDashboard() {
     const { user, isAuthenticated } = useAuth();
     const [pendingValidations, setPendingValidations] = useState([]);
+    const [assignedQueue, setAssignedQueue] = useState([]);
+    const [completedTasks, setCompletedTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedCampaign, setSelectedCampaign] = useState(null);
     const [approving, setApproving] = useState(false);
@@ -27,13 +29,42 @@ export default function ValidatorDashboard() {
     const isValidatorUser = isAuthenticated && user?.role === 'VALIDATOR';
     const isPreviewMode = !isAuthenticated || user?.role !== 'VALIDATOR';
 
-    const fetchPendingValidations = async () => {
+    const fetchData = async () => {
+        if (!isValidatorUser) return;
+
         setLoading(true);
         try {
-            const res = await validatorApi.getPendingValidations();
-            setPendingValidations(res.data?.data || []);
+            // Fetch user's assigned queue from MongoDB
+            let queue = [];
+            let completed = [];
+            try {
+                const queueRes = await queueApi.getQueue();
+                queue = queueRes.data?.data?.assignedQueue || [];
+                completed = queueRes.data?.data?.completedTasks || [];
+            } catch (e) {
+                console.warn('Failed to fetch queue:', e.message);
+            }
+
+            setAssignedQueue(queue.filter(t => t.type === 'VALIDATION'));
+            setCompletedTasks(completed.filter(t => t.type === 'VALIDATION'));
+
+            // Fetch campaign details from Fabric for assigned campaigns
+            const validationPromises = queue
+                .filter(t => t.type === 'VALIDATION')
+                .map(async (task) => {
+                    try {
+                        const res = await validatorApi.getCampaign(task.campaignId);
+                        return { ...res.data?.data, ...task };
+                    } catch {
+                        return { campaignId: task.campaignId, projectName: task.projectName };
+                    }
+                });
+
+            const validations = await Promise.all(validationPromises);
+            setPendingValidations(validations);
         } catch (err) {
             setPendingValidations([]);
+            setAssignedQueue([]);
             console.error(err);
         } finally {
             setLoading(false);
@@ -41,8 +72,12 @@ export default function ValidatorDashboard() {
     };
 
     useEffect(() => {
-        fetchPendingValidations();
-    }, []);
+        if (isValidatorUser) {
+            fetchData();
+        } else {
+            setLoading(false);
+        }
+    }, [isValidatorUser, user?.orgUserId]);
 
     const handleApprove = async (campaignId) => {
         if (isPreviewMode) {
@@ -61,8 +96,16 @@ export default function ValidatorDashboard() {
                 issues: [],
                 requiredDocuments: '',
             });
+
+            // Mark task as complete in MongoDB queue
+            await queueApi.complete({
+                campaignId,
+                type: 'VALIDATION',
+                result: 'APPROVED'
+            });
+
             setSelectedCampaign(null);
-            fetchPendingValidations();
+            fetchData();
             alert('Campaign approved successfully!');
         } catch (err) {
             console.error('Failed to approve:', err);
@@ -89,8 +132,16 @@ export default function ValidatorDashboard() {
                 issues: ['Did not meet requirements'],
                 requiredDocuments: '',
             });
+
+            // Mark task as complete in MongoDB queue
+            await queueApi.complete({
+                campaignId,
+                type: 'VALIDATION',
+                result: 'REJECTED'
+            });
+
             setSelectedCampaign(null);
-            fetchPendingValidations();
+            fetchData();
             alert('Campaign rejected.');
         } catch (err) {
             console.error('Failed to reject:', err);
@@ -136,7 +187,7 @@ export default function ValidatorDashboard() {
                             <span className="font-medium">{cftBalance.toLocaleString()} CFT</span>
                         </Link>
                     )}
-                    <button onClick={fetchPendingValidations} className="btn btn-secondary flex items-center gap-2">
+                    <button onClick={fetchData} className="btn btn-secondary flex items-center gap-2">
                         <RefreshCw size={18} />
                         Refresh
                     </button>

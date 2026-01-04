@@ -36,6 +36,53 @@ const userSchema = new mongoose.Schema({
         sparse: true
     },
 
+    // Startups owned by this user (STARTUP role)
+    startups: [{
+        startupId: { type: String, required: true },     // STU_{orgUserId}_{seq}
+        displayId: { type: String },                      // S-001, S-002
+        name: { type: String, required: true },
+        description: { type: String },
+        createdAt: { type: Date, default: Date.now },
+        campaigns: [{
+            campaignId: { type: String, required: true }, // CAMP_{startupId}_{seq}
+            displayId: { type: String },                   // C-001
+            projectName: { type: String },
+            status: { type: String, default: 'DRAFT' },
+            validationStatus: { type: String, default: 'NOT_SUBMITTED' },
+            assignedValidatorId: { type: String },
+            assignedPlatformId: { type: String },
+            createdAt: { type: Date, default: Date.now }
+        }]
+    }],
+
+    // Assigned work queue (VALIDATOR & PLATFORM roles)
+    assignedQueue: [{
+        campaignId: { type: String, required: true },
+        startupId: { type: String },
+        projectName: { type: String },
+        type: { type: String, enum: ['VALIDATION', 'PUBLISH'], required: true },
+        assignedAt: { type: Date, default: Date.now }
+    }],
+
+    // Completed work history
+    completedTasks: [{
+        campaignId: { type: String, required: true },
+        projectName: { type: String },
+        type: { type: String, enum: ['VALIDATION', 'PUBLISH'] },
+        result: { type: String },  // APPROVED, REJECTED, PUBLISHED
+        completedAt: { type: Date, default: Date.now }
+    }],
+
+    // Investments (INVESTOR role)
+    investments: [{
+        investmentId: { type: String },
+        campaignId: { type: String },
+        amount: { type: Number },
+        currency: { type: String },
+        status: { type: String },
+        investedAt: { type: Date, default: Date.now }
+    }],
+
     // Wallet Info (CFT/CFRT balances synced from chaincode)
     wallet: {
         cftBalance: { type: Number, default: 0 },
@@ -64,7 +111,7 @@ const userSchema = new mongoose.Schema({
 userSchema.pre('save', function (next) {
     if (!this.orgUserId) {
         const prefix = this.role.substring(0, 3).toUpperCase();
-        const uniqueId = crypto.randomBytes(4).toString('hex').toUpperCase();
+        const uniqueId = crypto.randomBytes(8).toString('hex').toUpperCase();
         this.orgUserId = `${prefix}_${uniqueId}`;
     }
     this.updatedAt = new Date();

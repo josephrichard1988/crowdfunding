@@ -5,52 +5,33 @@ import { dirname, resolve } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-dotenv.config({ path: resolve(__dirname, '../../.env.example') });
+dotenv.config({ path: resolve(__dirname, '../../.env') });
 
 export default {
     port: process.env.PORT || 3001,
     nodeEnv: process.env.NODE_ENV || 'development',
 
-    fabric: {
-        channelName: process.env.CHANNEL_NAME || 'crowdfunding-channel',
-        chaincodeName: process.env.CHAINCODE_NAME || 'crowdfunding',
-        gatewayPath: resolve(__dirname, '../../../_gateways'),
-        walletPath: resolve(__dirname, '../../../_wallets'),
-        mspPath: resolve(__dirname, '../../../_msp'),
+    // MongoDB configuration
+    mongodb: {
+        uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/crowdfunding'
     },
 
-    peers: {
-        orderer: process.env.ORDERER_ENDPOINT || 'orderer-api.127-0-0-1.nip.io:9090',
-        startup: process.env.STARTUP_PEER || 'startuporgpeer-api.127-0-0-1.nip.io:9090',
-        investor: process.env.INVESTOR_PEER || 'investororgpeer-api.127-0-0-1.nip.io:9090',
-        platform: process.env.PLATFORM_PEER || 'platformorgpeer-api.127-0-0-1.nip.io:9090',
-        validator: process.env.VALIDATOR_PEER || 'validatororgpeer-api.127-0-0-1.nip.io:9090',
+    // JWT configuration
+    jwt: {
+        secret: process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+        expiresIn: process.env.JWT_EXPIRES_IN || '7d'
     },
 
-    orgs: {
-        startup: {
-            mspId: 'StartupOrgMSP',
-            peerEndpoint: 'startuporgpeer-api.127-0-0-1.nip.io:9090',
-            gatewayFile: 'startuporggateway.json',
-            adminUser: 'startuporgadmin',
-        },
-        investor: {
-            mspId: 'InvestorOrgMSP',
-            peerEndpoint: 'investororgpeer-api.127-0-0-1.nip.io:9090',
-            gatewayFile: 'investororggateway.json',
-            adminUser: 'investororgadmin',
-        },
-        platform: {
-            mspId: 'PlatformOrgMSP',
-            peerEndpoint: 'platformorgpeer-api.127-0-0-1.nip.io:9090',
-            gatewayFile: 'platformorggateway.json',
-            adminUser: 'platformorgadmin',
-        },
-        validator: {
-            mspId: 'ValidatorOrgMSP',
-            peerEndpoint: 'validatororgpeer-api.127-0-0-1.nip.io:9090',
-            gatewayFile: 'validatororggateway.json',
-            adminUser: 'validatororgadmin',
-        },
-    },
+    // Fee configuration (synced from chaincode)
+    fees: {
+        inrToCftRate: parseFloat(process.env.INR_TO_CFT_RATE) || 2.5,
+        usdToCftRate: parseFloat(process.env.USD_TO_CFT_RATE) || 83.0,
+        registrationFeeCft: parseInt(process.env.REGISTRATION_FEE_CFT) || 250,
+        campaignCreationFeeCft: parseInt(process.env.CAMPAIGN_CREATION_FEE_CFT) || 1250,
+        campaignPublishingFeeCft: parseInt(process.env.CAMPAIGN_PUBLISHING_FEE_CFT) || 2500,
+        validationFeeCft: parseInt(process.env.VALIDATION_FEE_CFT) || 500,
+        disputeFeeCft: parseInt(process.env.DISPUTE_FEE_CFT) || 750,
+        investmentFeePercent: parseFloat(process.env.INVESTMENT_FEE_PERCENT) || 5,
+        withdrawalFeePercent: parseFloat(process.env.WITHDRAWAL_FEE_PERCENT) || 1
+    }
 };

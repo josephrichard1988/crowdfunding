@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { startupApi } from '../services/api';
-import { Plus, FileText, Share2, Bell, Loader2, RefreshCw, X, Rocket, Wallet, AlertCircle, LogIn, Coins, CreditCard, CheckCircle } from 'lucide-react';
+import { startupApi, startupMgmtApi } from '../services/api';
+import { Plus, FileText, Share2, Bell, Loader2, RefreshCw, X, Rocket, Wallet, AlertCircle, LogIn, Coins, CreditCard, CheckCircle, Building2 } from 'lucide-react';
 
 // Token fee constants (in CFT) - All paid by Startup
 const FEES = {
@@ -26,16 +26,34 @@ export default function StartupDashboard() {
     const [pendingAction, setPendingAction] = useState(null); // { type: 'validation' | 'publishing', campaignId, fee }
     const [processing, setProcessing] = useState(false);
 
+    // Startup management state
+    const [startups, setStartups] = useState([]);
+    const [selectedStartup, setSelectedStartup] = useState(null);
+    const [showCreateStartupModal, setShowCreateStartupModal] = useState(false);
+    const [newStartupName, setNewStartupName] = useState('');
+    const [newStartupDesc, setNewStartupDesc] = useState('');
+
     const [formData, setFormData] = useState({
-        campaignId: '',
-        startupId: '',
+        // 22 Parameters for campaign creation
         projectName: '',
         description: '',
         category: 'Technology',
         goalAmount: '',
         currency: 'USD',
         deadline: '',
+        hasRaised: false,
+        hasGovGrants: false,
+        incorpDate: new Date().toISOString().split('T')[0],
+        projectStage: 'Idea',
+        sector: 'Technology',
         tags: '',
+        teamAvailable: false,
+        investorCommitted: false,
+        duration: 90,
+        fundingDay: 1,
+        fundingMonth: new Date().getMonth() + 1,
+        fundingYear: new Date().getFullYear(),
+        investmentRange: '10K-100K',
         documents: '',
     });
 
@@ -49,15 +67,40 @@ export default function StartupDashboard() {
     const isStartupUser = isAuthenticated && user?.role === 'STARTUP';
     const isPreviewMode = !isAuthenticated || user?.role !== 'STARTUP';
 
-    const fetchCampaigns = async () => {
+    // Fetch startups and campaigns
+    const fetchData = async () => {
+        if (!isStartupUser) return;
+
         setLoading(true);
         try {
-            const res = await startupApi.getAllCampaigns();
-            setCampaigns(res.data?.data || []);
+            // Fetch user's startups from chaincode
+            let userStartups = [];
+            try {
+                const startupsRes = await startupMgmtApi.getStartupsByOwner(user.orgUserId);
+                userStartups = startupsRes.data?.data || [];
+            } catch (e) {
+                console.warn('Failed to fetch startups:', e.message);
+            }
+            setStartups(userStartups);
+
+            // Auto-select first startup if none selected
+            if (userStartups.length > 0 && !selectedStartup) {
+                setSelectedStartup(userStartups[0]);
+            }
+
+            // Fetch campaigns for selected startup (or all user campaigns)
+            try {
+                const startupIdToQuery = selectedStartup?.startupId || user?.orgUserId;
+                const res = await startupApi.getAllCampaigns(startupIdToQuery);
+                setCampaigns(res.data?.data || []);
+            } catch (e) {
+                console.warn('Failed to fetch campaigns:', e.message);
+                setCampaigns([]);
+            }
             setError(null);
         } catch (err) {
             setCampaigns([]);
-            setError(null);
+            setStartups([]);
             console.error(err);
         } finally {
             setLoading(false);
@@ -65,60 +108,119 @@ export default function StartupDashboard() {
     };
 
     useEffect(() => {
-        fetchCampaigns();
-    }, []);
+        if (isStartupUser) {
+            fetchData();
+        } else {
+            // In preview mode, don't show loading spinner
+            setLoading(false);
+        }
+    }, [isStartupUser, user?.orgUserId, selectedStartup?.startupId]);
+
+    // Create a new startup
+    const handleCreateStartup = async () => {
+        if (!newStartupName.trim()) {
+            alert('Startup name is required');
+            return;
+        }
+        try {
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+            const res = await startupMgmtApi.createStartup({
+                name: newStartupName,
+                description: newStartupDesc,
+                ownerId: user.orgUserId,
+                authToken: token  // For MongoDB sync
+            });
+            const createdStartup = res.data.data;
+            setStartups(prev => [...prev, createdStartup]);
+            setSelectedStartup(createdStartup);
+            setShowCreateStartupModal(false);
+            setNewStartupName('');
+            setNewStartupDesc('');
+            // Show success alert with startup details
+            alert(`✅ Startup Created Successfully!\n\nName: ${createdStartup.name}\nStartup ID: ${createdStartup.startupId}\nDisplay ID: ${createdStartup.displayId}\n\nYou can now create campaigns under this startup.`);
+        } catch (err) {
+            console.error('Failed to create startup:', err);
+            alert('Failed to create startup: ' + err.message);
+        }
+    };
 
     const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const { name, value, type, checked } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
+        }));
     };
 
     const handleCreateCampaign = async (e) => {
         e.preventDefault();
+
+        if (!selectedStartup) {
+            alert('Please create or select a startup first');
+            return;
+        }
+
         setCreating(true);
         try {
             const tags = formData.tags.split(',').map(t => t.trim()).filter(Boolean);
             const documents = formData.documents.split(',').map(d => d.trim()).filter(Boolean);
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
 
-            await startupApi.createCampaign({
-                campaignId: formData.campaignId || `CAMP_${Date.now()}`,
-                startupId: formData.startupId || 'STARTUP001',
+            // Create campaign with all 22 parameters + auth token for MongoDB sync
+            const result = await startupApi.createCampaign({
+                startupId: selectedStartup.startupId,  // System-managed startup ID
                 category: formData.category,
                 deadline: formData.deadline,
                 currency: formData.currency,
-                hasRaised: false,
-                hasGovGrants: false,
-                incorpDate: new Date().toISOString().split('T')[0],
-                projectStage: 'Idea',
-                sector: formData.category,
+                hasRaised: formData.hasRaised,
+                hasGovGrants: formData.hasGovGrants,
+                incorpDate: formData.incorpDate,
+                projectStage: formData.projectStage,
+                sector: formData.sector,
                 tags,
-                teamAvailable: true,
-                investorCommitted: false,
-                duration: 90,
-                fundingDay: 1,
-                fundingMonth: 1,
-                fundingYear: new Date().getFullYear(),
+                teamAvailable: formData.teamAvailable,
+                investorCommitted: formData.investorCommitted,
+                duration: parseInt(formData.duration) || 90,
+                fundingDay: parseInt(formData.fundingDay) || 1,
+                fundingMonth: parseInt(formData.fundingMonth) || 1,
+                fundingYear: parseInt(formData.fundingYear) || new Date().getFullYear(),
                 goalAmount: parseFloat(formData.goalAmount) || 50000,
-                investmentRange: '10K-100K',
+                investmentRange: formData.investmentRange,
                 projectName: formData.projectName,
                 description: formData.description,
                 documents,
+                authToken: token,  // For MongoDB sync
             });
 
             setShowCreateForm(false);
             setFormData({
-                campaignId: '',
-                startupId: '',
                 projectName: '',
                 description: '',
                 category: 'Technology',
                 goalAmount: '',
                 currency: 'USD',
                 deadline: '',
+                hasRaised: false,
+                hasGovGrants: false,
+                incorpDate: new Date().toISOString().split('T')[0],
+                projectStage: 'Idea',
+                sector: 'Technology',
                 tags: '',
+                teamAvailable: false,
+                investorCommitted: false,
+                duration: 90,
+                fundingDay: 1,
+                fundingMonth: new Date().getMonth() + 1,
+                fundingYear: new Date().getFullYear(),
+                investmentRange: '10K-100K',
                 documents: '',
             });
-            fetchCampaigns();
+            fetchData();
+
+            // Show success with auto-generated ID
+            if (result.data?.data?.displayId) {
+                alert(`Campaign ${result.data.data.displayId} created successfully!`);
+            }
         } catch (err) {
             console.error('Failed to create campaign:', err);
             alert('Failed to create campaign: ' + err.message);
@@ -138,12 +240,12 @@ export default function StartupDashboard() {
     };
 
     // Initiate publishing with payment confirmation
-    const initiateShareToPlatform = (campaignId, validationHash) => {
+    const initiateShareToPlatform = (campaignId, validationProofHash) => {
         if (!canPublish) {
             alert(`Insufficient balance. You need ${FEES.platformPublishing} CFT. Current: ${cftBalance} CFT`);
             return;
         }
-        setPendingAction({ type: 'publishing', campaignId, validationHash, fee: FEES.platformPublishing });
+        setPendingAction({ type: 'publishing', campaignId, validationProofHash, fee: FEES.platformPublishing });
         setShowPaymentModal(true);
     };
 
@@ -157,21 +259,31 @@ export default function StartupDashboard() {
             const newBalance = cftBalance - pendingAction.fee;
             await updateWallet({ cftBalance: newBalance });
 
-            // Execute the actual action
+            const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+            const campaign = campaigns.find(c => c.campaignId === pendingAction.campaignId);
+            const projectName = campaign?.projectName || campaign?.project_name || '';
+
+            // Execute the actual action with auth token for auto-allocation
             if (pendingAction.type === 'validation') {
                 await startupApi.submitForValidation(pendingAction.campaignId, {
                     documents: [],
-                    notes: 'Submitting for validation'
+                    notes: 'Submitting for validation',
+                    authToken: token,  // For auto-allocation
+                    startupId: selectedStartup?.startupId,
+                    projectName
                 });
-                alert(`Payment of ${pendingAction.fee} CFT confirmed! Campaign submitted for validation.`);
+                alert(`Payment of ${pendingAction.fee} CFT confirmed! Campaign submitted for validation (auto-assigned to validator).`);
             } else if (pendingAction.type === 'publishing') {
                 await startupApi.shareToPlatform(pendingAction.campaignId, {
-                    validationHash: pendingAction.validationHash || ''
+                    validationProofHash: pendingAction.validationProofHash || '',
+                    authToken: token,  // For auto-allocation
+                    startupId: selectedStartup?.startupId,
+                    projectName
                 });
-                alert(`Payment of ${pendingAction.fee} CFT confirmed! Campaign shared to platform.`);
+                alert(`Payment of ${pendingAction.fee} CFT confirmed! Campaign shared to platform (auto-assigned to publisher).`);
             }
 
-            fetchCampaigns();
+            fetchData();
         } catch (err) {
             console.error('Failed:', err);
             alert('Failed: ' + err.message);
@@ -292,31 +404,10 @@ export default function StartupDashboard() {
                             <span className="font-medium">{cftBalance.toLocaleString()} CFT</span>
                         </Link>
                     )}
-                    <button onClick={fetchCampaigns} className="btn btn-secondary flex items-center gap-2">
+                    <button onClick={fetchData} className="btn btn-secondary flex items-center gap-2">
                         <RefreshCw size={18} />
                         Refresh
                     </button>
-                    {isStartupUser ? (
-                        <button
-                            onClick={() => {
-                                if (!canCreateCampaign) {
-                                    alert(`Insufficient balance. You need ${FEES.campaignCreation} CFT to create a campaign. Current balance: ${cftBalance} CFT`);
-                                    return;
-                                }
-                                setShowCreateForm(true);
-                            }}
-                            className={`btn flex items-center gap-2 ${canCreateCampaign ? 'btn-primary' : 'bg-gray-400 cursor-not-allowed'}`}
-                        >
-                            <Plus size={18} />
-                            New Campaign
-                            {!canCreateCampaign && <AlertCircle size={14} className="ml-1" />}
-                        </button>
-                    ) : (
-                        <button disabled className="btn bg-gray-300 text-gray-500 cursor-not-allowed flex items-center gap-2">
-                            <Plus size={18} />
-                            New Campaign
-                        </button>
-                    )}
                 </div>
             </div>
 
@@ -334,29 +425,15 @@ export default function StartupDashboard() {
                             </button>
                         </div>
                         <form onSubmit={handleCreateCampaign} className="p-6 space-y-4">
-                            <div className="grid md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="label">Campaign ID</label>
-                                    <input
-                                        type="text"
-                                        name="campaignId"
-                                        value={formData.campaignId}
-                                        onChange={handleInputChange}
-                                        placeholder="CAMP001"
-                                        className="input"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="label">Startup ID</label>
-                                    <input
-                                        type="text"
-                                        name="startupId"
-                                        value={formData.startupId}
-                                        onChange={handleInputChange}
-                                        placeholder="STARTUP001"
-                                        className="input"
-                                    />
-                                </div>
+                            {/* Selected Startup Info - IDs are system-generated */}
+                            <div className="p-3 bg-primary-50 dark:bg-primary-900/30 rounded-lg">
+                                <p className="text-sm text-primary-700 dark:text-primary-300">
+                                    <strong>Creating campaign for:</strong> {selectedStartup?.name || 'No startup selected'}
+                                </p>
+                                <p className="text-xs text-primary-600 dark:text-primary-400 mt-1">
+                                    Startup ID: {selectedStartup?.startupId || 'N/A'}
+                                    <span className="ml-2 text-gray-500">(Campaign ID will be auto-generated)</span>
+                                </p>
                             </div>
                             <div>
                                 <label className="label">Project Name *</label>
@@ -502,103 +579,122 @@ export default function StartupDashboard() {
                 </div>
             </div>
 
-            {/* Campaigns List */}
-            <div className="card">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Your Campaigns</h2>
-
-                {loading ? (
-                    <div className="flex justify-center py-12">
-                        <Loader2 className="animate-spin text-primary-600" size={40} />
-                    </div>
-                ) : campaigns.length === 0 ? (
-                    <div className="text-center py-12">
-                        <Rocket size={48} className="mx-auto mb-4 text-gray-300" />
-                        <p className="text-gray-500">No campaigns yet. Create your first campaign!</p>
+            {/* My Startups Section */}
+            {isStartupUser && (
+                <div className="card">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                            <Building2 className="text-primary-600" />
+                            My Startups
+                        </h2>
                         <button
-                            onClick={() => setShowCreateForm(true)}
-                            className="btn btn-primary mt-4"
+                            onClick={() => setShowCreateStartupModal(true)}
+                            className="btn btn-primary flex items-center gap-2"
                         >
-                            <Plus size={18} className="mr-2" />
-                            Create Campaign
+                            <Plus size={18} />
+                            New Startup
                         </button>
                     </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full">
-                            <thead>
-                                <tr className="border-b border-gray-200 dark:border-gray-700">
-                                    <th className="text-left py-3 px-4 text-gray-600 dark:text-gray-400 font-medium">Campaign</th>
-                                    <th className="text-left py-3 px-4 text-gray-600 dark:text-gray-400 font-medium">Goal</th>
-                                    <th className="text-left py-3 px-4 text-gray-600 dark:text-gray-400 font-medium">Raised</th>
-                                    <th className="text-left py-3 px-4 text-gray-600 dark:text-gray-400 font-medium">Status</th>
-                                    <th className="text-left py-3 px-4 text-gray-600 dark:text-gray-400 font-medium">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {campaigns.map((campaign) => (
-                                    <tr key={campaign.campaignId} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                        <td className="py-4 px-4">
-                                            <div>
-                                                <p className="font-medium text-gray-900 dark:text-white">{campaign.project_name || campaign.projectName}</p>
-                                                <p className="text-sm text-gray-500">{campaign.campaignId}</p>
-                                            </div>
-                                        </td>
-                                        <td className="py-4 px-4 text-gray-900 dark:text-white">
-                                            ${(campaign.goal_amount || campaign.goalAmount || 0).toLocaleString()}
-                                        </td>
-                                        <td className="py-4 px-4 text-gray-900 dark:text-white">
-                                            ${(campaign.funds_raised_amount || campaign.fundsRaisedAmount || 0).toLocaleString()}
-                                        </td>
-                                        <td className="py-4 px-4">
-                                            <span className={`badge ${getStatusBadge(campaign.status)}`}>
-                                                {campaign.status}
-                                            </span>
-                                        </td>
-                                        <td className="py-4 px-4">
-                                            <div className="flex gap-2 flex-wrap">
-                                                {/* View campaign details */}
-                                                <Link
-                                                    to={`/startup/campaign/${campaign.campaignId}`}
-                                                    className="text-primary-600 hover:text-primary-800 text-sm font-medium"
-                                                >
-                                                    View
-                                                </Link>
-                                                {/* Submit for Validation - only for DRAFT campaigns */}
-                                                {campaign.status === 'DRAFT' && !campaign.validationStatus && (
-                                                    <button
-                                                        onClick={() => initiateValidationSubmit(campaign.campaignId)}
-                                                        className="text-yellow-600 hover:text-yellow-800 text-sm font-medium flex items-center gap-1"
-                                                    >
-                                                        <Coins size={14} />
-                                                        Submit (50 CFT)
-                                                    </button>
-                                                )}
-                                                {/* Share to Platform - only for APPROVED campaigns */}
-                                                {campaign.validationStatus === 'APPROVED' && campaign.status !== 'PUBLISHED' && (
-                                                    <button
-                                                        onClick={() => initiateShareToPlatform(campaign.campaignId, campaign.validationHash)}
-                                                        className="text-accent-600 hover:text-accent-800 text-sm font-medium flex items-center gap-1"
-                                                    >
-                                                        <Coins size={14} />
-                                                        Publish (50 CFT)
-                                                    </button>
-                                                )}
-                                                {/* Status indicator */}
-                                                {campaign.validationStatus === 'PENDING_VALIDATION' && (
-                                                    <span className="text-xs text-yellow-600">Pending Validation</span>
-                                                )}
-                                                {campaign.status === 'PUBLISHED' && (
-                                                    <span className="text-xs text-green-600">Published ✓</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+
+                    {startups.length === 0 ? (
+                        <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                            <Building2 size={48} className="mx-auto mb-4 text-gray-300" />
+                            <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">No startups yet</h3>
+                            <p className="text-gray-500 mb-4">Create your first startup to start launching campaigns</p>
+                            <button
+                                onClick={() => setShowCreateStartupModal(true)}
+                                className="btn btn-primary"
+                            >
+                                <Plus size={18} className="mr-2" />
+                                Create First Startup
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {startups.map((startup) => (
+                                <div
+                                    key={startup.startupId}
+                                    onClick={() => navigate(`/startup/${startup.startupId}`)}
+                                    className="p-4 rounded-lg border-2 cursor-pointer transition-all border-gray-200 dark:border-gray-700 hover:border-primary-300 hover:shadow-lg bg-white dark:bg-gray-800"
+                                >
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <h3 className="font-bold text-gray-900 dark:text-white">{startup.name}</h3>
+                                            <p className="text-xs text-gray-500 mt-1">ID: {startup.displayId || startup.startupId}</p>
+                                        </div>
+                                    </div>
+                                    {startup.description && (
+                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
+                                            {startup.description}
+                                        </p>
+                                    )}
+                                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                                        <span className="text-xs text-gray-500">
+                                            {(startup.campaignIds || startup.CampaignIDs || startup.campaign_ids || []).length} campaigns
+                                        </span>
+                                        <span className="text-xs text-primary-600 font-medium">View Campaigns →</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Create Startup Modal */}
+            {showCreateStartupModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
+                        <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                                <Building2 className="text-primary-600" size={24} />
+                                Create New Startup
+                            </h2>
+                            <button onClick={() => setShowCreateStartupModal(false)} className="text-gray-500 hover:text-gray-700">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="label">Startup Name *</label>
+                                <input
+                                    type="text"
+                                    value={newStartupName}
+                                    onChange={(e) => setNewStartupName(e.target.value)}
+                                    placeholder="Enter startup name"
+                                    className="input w-full"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="label">Description</label>
+                                <textarea
+                                    value={newStartupDesc}
+                                    onChange={(e) => setNewStartupDesc(e.target.value)}
+                                    placeholder="Describe your startup..."
+                                    rows={3}
+                                    className="input w-full"
+                                />
+                            </div>
+                            <p className="text-xs text-gray-500">
+                                A unique Startup ID will be auto-generated for your startup.
+                            </p>
+                        </div>
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button onClick={() => setShowCreateStartupModal(false)} className="btn btn-secondary">
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleCreateStartup}
+                                className="btn btn-primary flex items-center gap-2"
+                            >
+                                <Plus size={18} />
+                                Create Startup
+                            </button>
+                        </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </div>
     );
 }

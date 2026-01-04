@@ -1198,14 +1198,172 @@ func (i *InvestorContract) GetInvestment(ctx contractapi.TransactionContextInter
 
 // GetInvestmentsByInvestor retrieves all investments by an investor
 func (i *InvestorContract) GetInvestmentsByInvestor(ctx contractapi.TransactionContextInterface, investorID string) (string, error) {
-	// Would use rich query in CouchDB
-	return `[]`, nil
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(InvestorPrivateCollection, "MY_INVESTMENT_", "MY_INVESTMENT_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query investments: %v", err)
+	}
+	defer iterator.Close()
+
+	var investments []Investment
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var investment Investment
+		err = json.Unmarshal(queryResponse.Value, &investment)
+		if err != nil {
+			continue
+		}
+
+		// Filter by investorID
+		if investment.InvestorID == investorID {
+			investments = append(investments, investment)
+		}
+	}
+
+	if investments == nil {
+		investments = []Investment{}
+	}
+
+	investmentsJSON, _ := json.Marshal(investments)
+	return string(investmentsJSON), nil
+}
+
+// GetMyInvestments retrieves all investments for the current user
+// This is an alias for GetInvestmentsByInvestor when called without filter
+func (i *InvestorContract) GetMyInvestments(ctx contractapi.TransactionContextInterface) (string, error) {
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(InvestorPrivateCollection, "MY_INVESTMENT_", "MY_INVESTMENT_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query investments: %v", err)
+	}
+	defer iterator.Close()
+
+	var investments []Investment
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var investment Investment
+		err = json.Unmarshal(queryResponse.Value, &investment)
+		if err != nil {
+			continue
+		}
+
+		investments = append(investments, investment)
+	}
+
+	if investments == nil {
+		investments = []Investment{}
+	}
+
+	investmentsJSON, _ := json.Marshal(investments)
+	return string(investmentsJSON), nil
 }
 
 // GetInvestmentsByCampaign retrieves all investments for a campaign
 func (i *InvestorContract) GetInvestmentsByCampaign(ctx contractapi.TransactionContextInterface, campaignID string) (string, error) {
-	// Would use rich query in CouchDB
-	return `[]`, nil
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(InvestorPrivateCollection, "MY_INVESTMENT_", "MY_INVESTMENT_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query investments: %v", err)
+	}
+	defer iterator.Close()
+
+	var investments []Investment
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var investment Investment
+		err = json.Unmarshal(queryResponse.Value, &investment)
+		if err != nil {
+			continue
+		}
+
+		// Filter by campaignID
+		if investment.CampaignID == campaignID {
+			investments = append(investments, investment)
+		}
+	}
+
+	if investments == nil {
+		investments = []Investment{}
+	}
+
+	investmentsJSON, _ := json.Marshal(investments)
+	return string(investmentsJSON), nil
+}
+
+// GetViewedCampaigns retrieves all viewed campaigns
+func (i *InvestorContract) GetViewedCampaigns(ctx contractapi.TransactionContextInterface) (string, error) {
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(InvestorPrivateCollection, "VIEWED_", "VIEWED_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query viewed campaigns: %v", err)
+	}
+	defer iterator.Close()
+
+	var viewed []map[string]interface{}
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var record map[string]interface{}
+		err = json.Unmarshal(queryResponse.Value, &record)
+		if err != nil {
+			continue
+		}
+
+		viewed = append(viewed, record)
+	}
+
+	if viewed == nil {
+		viewed = []map[string]interface{}{}
+	}
+
+	viewedJSON, _ := json.Marshal(viewed)
+	return string(viewedJSON), nil
+}
+
+// GetViewedCampaignsByInvestor retrieves viewed campaigns for a specific investor
+func (i *InvestorContract) GetViewedCampaignsByInvestor(ctx contractapi.TransactionContextInterface, investorID string) (string, error) {
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(InvestorPrivateCollection, "VIEWED_", "VIEWED_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query viewed campaigns: %v", err)
+	}
+	defer iterator.Close()
+
+	var viewed []map[string]interface{}
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var record map[string]interface{}
+		err = json.Unmarshal(queryResponse.Value, &record)
+		if err != nil {
+			continue
+		}
+
+		// Filter by investorID
+		if id, ok := record["investorId"].(string); ok && id == investorID {
+			viewed = append(viewed, record)
+		}
+	}
+
+	if viewed == nil {
+		viewed = []map[string]interface{}{}
+	}
+
+	viewedJSON, _ := json.Marshal(viewed)
+	return string(viewedJSON), nil
 }
 
 // GetProposal retrieves a proposal
@@ -1220,12 +1378,70 @@ func (i *InvestorContract) GetProposal(ctx contractapi.TransactionContextInterfa
 
 // GetProposalsByCampaign retrieves all proposals for a campaign
 func (i *InvestorContract) GetProposalsByCampaign(ctx contractapi.TransactionContextInterface, campaignID string) (string, error) {
-	return `[]`, nil
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(StartupInvestorCollection, "PROPOSAL_", "PROPOSAL_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query proposals: %v", err)
+	}
+	defer iterator.Close()
+
+	var proposals []InvestmentProposal
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var proposal InvestmentProposal
+		err = json.Unmarshal(queryResponse.Value, &proposal)
+		if err != nil {
+			continue
+		}
+
+		if proposal.CampaignID == campaignID {
+			proposals = append(proposals, proposal)
+		}
+	}
+
+	if proposals == nil {
+		proposals = []InvestmentProposal{}
+	}
+
+	proposalsJSON, _ := json.Marshal(proposals)
+	return string(proposalsJSON), nil
 }
 
 // GetProposalsByInvestor retrieves all proposals by an investor
 func (i *InvestorContract) GetProposalsByInvestor(ctx contractapi.TransactionContextInterface, investorID string) (string, error) {
-	return `[]`, nil
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(StartupInvestorCollection, "PROPOSAL_", "PROPOSAL_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query proposals: %v", err)
+	}
+	defer iterator.Close()
+
+	var proposals []InvestmentProposal
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var proposal InvestmentProposal
+		err = json.Unmarshal(queryResponse.Value, &proposal)
+		if err != nil {
+			continue
+		}
+
+		if proposal.InvestorID == investorID {
+			proposals = append(proposals, proposal)
+		}
+	}
+
+	if proposals == nil {
+		proposals = []InvestmentProposal{}
+	}
+
+	proposalsJSON, _ := json.Marshal(proposals)
+	return string(proposalsJSON), nil
 }
 
 // GetRefundRequest retrieves a refund request
@@ -1240,7 +1456,36 @@ func (i *InvestorContract) GetRefundRequest(ctx contractapi.TransactionContextIn
 
 // GetInvestorDisputes retrieves all disputes for an investor
 func (i *InvestorContract) GetInvestorDisputes(ctx contractapi.TransactionContextInterface, investorID string) (string, error) {
-	return `[]`, nil
+	iterator, err := ctx.GetStub().GetPrivateDataByRange(AllOrgsCollection, "DISPUTE_", "DISPUTE_~")
+	if err != nil {
+		return "[]", fmt.Errorf("failed to query disputes: %v", err)
+	}
+	defer iterator.Close()
+
+	var disputes []InvestorDisputeSubmission
+	for iterator.HasNext() {
+		queryResponse, err := iterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var dispute InvestorDisputeSubmission
+		err = json.Unmarshal(queryResponse.Value, &dispute)
+		if err != nil {
+			continue
+		}
+
+		if dispute.InvestorID == investorID {
+			disputes = append(disputes, dispute)
+		}
+	}
+
+	if disputes == nil {
+		disputes = []InvestorDisputeSubmission{}
+	}
+
+	disputesJSON, _ := json.Marshal(disputes)
+	return string(disputesJSON), nil
 }
 
 // PublishInvestmentSummary publishes investment summary to public ledger
@@ -1424,4 +1669,3 @@ func (i *InvestorContract) GetDisputePenaltyScheduleForInvestor(
 
 	return string(penaltiesJSON), nil
 }
-

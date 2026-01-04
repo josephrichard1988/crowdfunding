@@ -13,6 +13,150 @@ source ./deploy_chaincode.sh switch startup
 
 ---
 
+## Test Flow 0: Startup Management (REQUIRED BEFORE CAMPAIGNS)
+
+> **Important:** A startup must be created before any campaigns can be created under it.
+
+### 0.1 INVOKE: Create Startup
+
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"StartupContract:CreateStartup","Args":["STARTUP001","STU_user123_001","TechVentures Inc","An innovative technology startup focused on IoT solutions","S-001"]}'
+```
+
+**Parameters:**
+
+1. `startupID`: "STARTUP001" - Unique identifier for the startup
+2. `ownerID`: "STU_user123_001" - The orgUserId of the owner (from MongoDB)
+3. `name`: "TechVentures Inc" - Display name of the startup
+4. `description`: "An innovative technology startup focused on IoT solutions"
+5. `displayID`: "S-001" - Human-readable display ID
+
+---
+
+### 0.2 QUERY: Get Startup by ID
+
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:GetStartup","Args":["STARTUP001"]}'
+```
+
+**Expected Response:**
+
+```json
+{
+  "startupId": "STARTUP001",
+  "ownerId": "STU_user123_001",
+  "name": "TechVentures Inc",
+  "description": "An innovative technology startup focused on IoT solutions",
+  "displayId": "S-001",
+  "campaignIds": [],
+  "createdAt": "2026-01-02T12:00:00Z",
+  "updatedAt": "2026-01-02T12:00:00Z"
+}
+```
+
+---
+
+### 0.3 QUERY: Get All Startups by Owner
+
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:GetStartupsByOwner","Args":["STU_user123_001"]}'
+```
+
+**Expected Response:**
+
+```json
+[
+  {
+    "startupId": "STARTUP001",
+    "ownerId": "STU_user123_001",
+    "name": "TechVentures Inc",
+    "description": "An innovative technology startup focused on IoT solutions",
+    "displayId": "S-001",
+    "campaignIds": ["CAMP001"],
+    "createdAt": "2026-01-02T12:00:00Z",
+    "updatedAt": "2026-01-02T12:00:00Z"
+  }
+]
+```
+
+---
+
+### 0.4 Create Multiple Startups for Same Owner
+
+```bash
+# Second startup for same owner
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"StartupContract:CreateStartup","Args":["STARTUP002","STU_user123_001","HealthTech Solutions","A healthcare technology startup","S-002"]}'
+```
+
+---
+
+## Test Flow 0.5: Deletion with Fees
+
+> **Fee Structure:**
+>
+> - Campaign with funds raised: **60% of funds**
+> - Campaign with no funds: **100 CFT fixed**
+> - Startup: Sum of individual campaign fees (or 100 CFT if no campaigns)
+
+### 0.5.1 QUERY: Get Campaign Deletion Fee Preview
+
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:CalculateCampaignDeletionFee","Args":["CAMP001"]}'
+```
+
+**Expected Response (no funds raised):**
+
+```json
+{
+  "entityId": "CAMP001",
+  "entityType": "CAMPAIGN",
+  "fundsRaised": 0,
+  "feeAmount": 100,
+  "feePercentage": 0,
+  "isFixedFee": true
+}
+```
+
+---
+
+### 0.5.2 INVOKE: Delete Campaign
+
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"StartupContract:DeleteCampaign","Args":["CAMP001","User requested deletion"]}'
+```
+
+**Response includes deletion record with fee charged.**
+
+---
+
+### 0.5.3 QUERY: Get Startup Deletion Fee Preview
+
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:CalculateStartupDeletionFee","Args":["STARTUP001"]}'
+```
+
+**Returns total fee and breakdown per campaign.**
+
+---
+
+### 0.5.4 INVOKE: Delete Startup (and all campaigns)
+
+```bash
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"StartupContract:DeleteStartup","Args":["STARTUP002","Closing business"]}'
+```
+
+---
+
+### 0.5.5 QUERY: Get Deletion Record
+
+```bash
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:GetDeletionRecord","Args":["DEL_STU_STARTUP002_1735812345"]}'
+```
+
+**Deletion records are stored in public world state for audit purposes.**
+
+---
+
 ## Test Flow 1: Complete Campaign Lifecycle
 
 ### 1.1 INVOKE: Create Campaign (22 Parameters)
@@ -108,10 +252,13 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfund
 source ./deploy_chaincode.sh switch validator
 
 # View pending campaign (from StartupValidatorShared)
+# Check "submissionHash" in the response
 peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"ValidatorContract:GetCampaign","Args":["CAMP001"]}'
 
-# Validate campaign
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses validatororgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"ValidatorContract:ValidateCampaign","Args":["VAL001","CAMP001","VALIDATOR001","8.5","3.2","LOW","[\"Strong technical team\",\"Viable market\"]","[]",""]}'
+# Validate campaign (Start validation)
+# Args: [ValidationID, CampaignID, ValidatorID, SubmissionHash, DocumentsReviewedJSON]
+# You must provide the submissionHash from step 1.3/GetCampaign to link the validation to the specific submission
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses validatororgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"ValidatorContract:ValidateCampaign","Args":["VAL001","CAMP001","VALIDATOR001","<SUBMISSION_HASH_FROM_ABOVE>","[\"business_plan_v2.pdf\"]"]}'
 ```
 
 ### 1.6 INVOKE: Approve Campaign (Generates Digital Signature)
@@ -122,13 +269,11 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfund
 
 **What Happens:**
 
-- Validator generates digital signature (validationHash)
+- Validator generates digital signature (**validationProofHash**)
 - Stores approval in StartupValidatorShared (Startup can see)
 - Stores approval in ValidatorPlatformShared (Platform can verify)
 
 ---
-
-### 1.7 Switch to StartupOrg: Share Campaign with Platform
 
 ### 1.7 Switch to StartupOrg: Share Campaign with Platform
 
@@ -137,7 +282,7 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfund
 source ./deploy_chaincode.sh switch startup
 
 # Share campaign with Platform (includes validator hash)
-# Note: Use the actual validationHash returned from validator approval
+# Note: Use the actual validationProofHash returned from validator approval
 peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090  -c '{"function":"StartupContract:ShareCampaignToPlatform","Args":["CAMP001", "05a518ddb643f851387951bb105b85c55b3adc8d210fc761182a711095f0bc85"]}'
 ```
 
@@ -159,7 +304,7 @@ source ./deploy_chaincode.sh switch platform
 # Verify shared campaign details
 peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"PlatformContract:GetSharedCampaign","Args":["CAMP001"]}'
 
-# Publish campaign (only 2 parameters: campaignID + validationHash)
+# Publish campaign (only 2 parameters: campaignID + validationProofHash)
 peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:9090 -c '{"function":"PlatformContract:PublishCampaignToPortal","Args":["CAMP001","05a518ddb643f851387951bb105b85c55b3adc8d210fc761182a711095f0bc85"]}'
 ```
 

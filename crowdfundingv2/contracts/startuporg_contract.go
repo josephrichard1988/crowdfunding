@@ -110,6 +110,68 @@ type FeePaymentRecord struct {
 	PaidAt          string  `json:"paidAt"`
 }
 
+// Startup represents a startup entity owned by a user
+type Startup struct {
+	StartupID   string   `json:"startupId"`
+	OwnerID     string   `json:"ownerId"` // orgUserId of the startup owner
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	DisplayID   string   `json:"displayId"`   // Human-readable ID like S-001
+	CampaignIDs []string `json:"campaignIds"` // List of campaign IDs under this startup
+	CreatedAt   string   `json:"createdAt"`
+	UpdatedAt   string   `json:"updatedAt"`
+}
+
+// DeletionRecord tracks deletion of campaigns/startups with fee information
+type DeletionRecord struct {
+	DeletionID    string  `json:"deletionId"`
+	EntityType    string  `json:"entityType"`    // "CAMPAIGN" or "STARTUP"
+	EntityID      string  `json:"entityId"`      // campaignId or startupId
+	EntityName    string  `json:"entityName"`    // Name for reference
+	OwnerID       string  `json:"ownerId"`       // Owner of deleted entity
+	FeeCharged    float64 `json:"feeCharged"`    // Fee in CFT
+	FundsRaised   float64 `json:"fundsRaised"`   // Original funds raised
+	FeePercentage float64 `json:"feePercentage"` // 60% or 0 for fixed fee
+	Reason        string  `json:"reason"`        // User-provided reason
+	DeletedAt     string  `json:"deletedAt"`
+	TxID          string  `json:"txId"` // Transaction ID
+}
+
+// DeletionFeePreview for showing fee before deletion
+type DeletionFeePreview struct {
+	EntityID      string  `json:"entityId"`
+	EntityType    string  `json:"entityType"`
+	FundsRaised   float64 `json:"fundsRaised"`
+	FeeAmount     float64 `json:"feeAmount"`
+	FeePercentage float64 `json:"feePercentage"` // 60 or 0 (for fixed)
+	IsFixedFee    bool    `json:"isFixedFee"`
+}
+
+// PublicDeletionRecord - minimal info for public visibility (no sensitive data)
+type PublicDeletionRecord struct {
+	DeletionID string  `json:"deletionId"`
+	EntityType string  `json:"entityType"` // "CAMPAIGN" or "STARTUP"
+	EntityID   string  `json:"entityId"`   // campaignId or startupId (no name)
+	FeeCharged float64 `json:"feeCharged"` // Fee in CFT
+	Reason     string  `json:"reason"`     // User-provided reason
+	DeletedAt  string  `json:"deletedAt"`
+	TxID       string  `json:"txId"` // Transaction ID for verification
+}
+
+// StartupDeletionFeeResult wraps multiple return values for CalculateStartupDeletionFee
+// ContractAPI only allows single return value + error
+type StartupDeletionFeeResult struct {
+	TotalFee     float64              `json:"totalFee"`
+	CampaignFees []DeletionFeePreview `json:"campaignFees"`
+}
+
+// StartupDeletionResult wraps multiple return values for DeleteStartup
+// ContractAPI only allows single return value + error
+type StartupDeletionResult struct {
+	StartupDeletion   DeletionRecord   `json:"startupDeletion"`
+	CampaignDeletions []DeletionRecord `json:"campaignDeletions"`
+}
+
 // ============================================================================
 // INIT
 // ============================================================================
@@ -117,6 +179,466 @@ type FeePaymentRecord struct {
 func (s *StartupContract) InitLedger(ctx contractapi.TransactionContextInterface) error {
 	fmt.Println("StartupOrg contract initialized with PDC support")
 	return nil
+}
+
+// ============================================================================
+// STARTUP MANAGEMENT - Startup must be created before campaigns
+// ============================================================================
+
+// CreateStartup creates a new startup entity for a user
+func (s *StartupContract) CreateStartup(
+	ctx contractapi.TransactionContextInterface,
+	startupID string,
+	ownerID string,
+	name string,
+	description string,
+	displayID string,
+) error {
+	// Validate inputs
+	if startupID == "" || ownerID == "" || name == "" {
+		return fmt.Errorf("startupID, ownerID, and name are required")
+	}
+
+	// Check if startup already exists
+	existingStartup, err := ctx.GetStub().GetPrivateData(StartupPrivateCollection, "STARTUP_"+startupID)
+	if err != nil {
+		return fmt.Errorf("failed to check existing startup: %v", err)
+	}
+	if existingStartup != nil {
+		return fmt.Errorf("startup %s already exists", startupID)
+	}
+
+	// Create startup object
+	startup := Startup{
+		StartupID:   startupID,
+		OwnerID:     ownerID,
+		Name:        name,
+		Description: description,
+		DisplayID:   displayID,
+		CampaignIDs: []string{},
+		CreatedAt:   time.Now().Format(time.RFC3339),
+		UpdatedAt:   time.Now().Format(time.RFC3339),
+	}
+
+	// Store in private data collection
+	startupJSON, err := json.Marshal(startup)
+	if err != nil {
+		return fmt.Errorf("failed to marshal startup: %v", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(StartupPrivateCollection, "STARTUP_"+startupID, startupJSON)
+	if err != nil {
+		return fmt.Errorf("failed to store startup: %v", err)
+	}
+
+	// Also store owner mapping for querying startups by owner
+	// Key: OWNER_{ownerID}_{startupID}
+	ownerKey := fmt.Sprintf("OWNER_%s_%s", ownerID, startupID)
+	err = ctx.GetStub().PutPrivateData(StartupPrivateCollection, ownerKey, startupJSON)
+	if err != nil {
+		return fmt.Errorf("failed to store owner mapping: %v", err)
+	}
+
+	return nil
+}
+
+// GetStartup retrieves a startup by its ID
+func (s *StartupContract) GetStartup(
+	ctx contractapi.TransactionContextInterface,
+	startupID string,
+) (*Startup, error) {
+	startupJSON, err := ctx.GetStub().GetPrivateData(StartupPrivateCollection, "STARTUP_"+startupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read startup: %v", err)
+	}
+	if startupJSON == nil {
+		return nil, fmt.Errorf("startup %s not found", startupID)
+	}
+
+	var startup Startup
+	err = json.Unmarshal(startupJSON, &startup)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal startup: %v", err)
+	}
+
+	return &startup, nil
+}
+
+// GetStartupsByOwner retrieves all startups owned by a specific user
+func (s *StartupContract) GetStartupsByOwner(
+	ctx contractapi.TransactionContextInterface,
+	ownerID string,
+) ([]Startup, error) {
+	// Query using range with owner prefix
+	startKey := fmt.Sprintf("OWNER_%s_", ownerID)
+	endKey := fmt.Sprintf("OWNER_%s_~", ownerID)
+
+	resultsIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupPrivateCollection, startKey, endKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query startups by owner: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var startups []Startup
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			continue
+		}
+
+		var startup Startup
+		err = json.Unmarshal(queryResponse.Value, &startup)
+		if err != nil {
+			continue
+		}
+		startups = append(startups, startup)
+	}
+
+	if startups == nil {
+		startups = []Startup{}
+	}
+
+	return startups, nil
+}
+
+// AddCampaignToStartup adds a campaign ID to a startup's campaign list
+func (s *StartupContract) AddCampaignToStartup(
+	ctx contractapi.TransactionContextInterface,
+	startupID string,
+	campaignID string,
+) error {
+	startup, err := s.GetStartup(ctx, startupID)
+	if err != nil {
+		return err
+	}
+
+	// Add campaign to list
+	startup.CampaignIDs = append(startup.CampaignIDs, campaignID)
+	startup.UpdatedAt = time.Now().Format(time.RFC3339)
+
+	// Update in private data
+	startupJSON, err := json.Marshal(startup)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated startup: %v", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(StartupPrivateCollection, "STARTUP_"+startupID, startupJSON)
+	if err != nil {
+		return fmt.Errorf("failed to update startup: %v", err)
+	}
+
+	// Update owner mapping too
+	ownerKey := fmt.Sprintf("OWNER_%s_%s", startup.OwnerID, startupID)
+	err = ctx.GetStub().PutPrivateData(StartupPrivateCollection, ownerKey, startupJSON)
+	if err != nil {
+		return fmt.Errorf("failed to update owner mapping: %v", err)
+	}
+
+	return nil
+}
+
+// ============================================================================
+// DELETION WITH FEES
+// ============================================================================
+
+// CalculateCampaignDeletionFee calculates the fee for deleting a campaign
+// Returns 60% of funds raised, or 100 CFT if no funds raised
+func (s *StartupContract) CalculateCampaignDeletionFee(
+	ctx contractapi.TransactionContextInterface,
+	campaignID string,
+) (*DeletionFeePreview, error) {
+	campaign, err := s.GetCampaign(ctx, campaignID)
+	if err != nil {
+		return nil, err
+	}
+
+	var feeAmount float64
+	var feePercentage float64
+	isFixedFee := false
+
+	fundsRaised := campaign.FundsRaisedAmount
+	if fundsRaised > 0 {
+		// 60% of funds raised
+		feePercentage = 60.0
+		feeAmount = fundsRaised * 0.60
+	} else {
+		// Fixed 100 CFT for campaigns with no funds
+		feeAmount = 100.0
+		isFixedFee = true
+	}
+
+	return &DeletionFeePreview{
+		EntityID:      campaignID,
+		EntityType:    "CAMPAIGN",
+		FundsRaised:   fundsRaised,
+		FeeAmount:     feeAmount,
+		FeePercentage: feePercentage,
+		IsFixedFee:    isFixedFee,
+	}, nil
+}
+
+// DeleteCampaign deletes a campaign and records the deletion with fee
+func (s *StartupContract) DeleteCampaign(
+	ctx contractapi.TransactionContextInterface,
+	campaignID string,
+	reason string,
+) (*DeletionRecord, error) {
+	// Get campaign
+	campaign, err := s.GetCampaign(ctx, campaignID)
+	if err != nil {
+		return nil, fmt.Errorf("campaign not found: %v", err)
+	}
+
+	// Calculate fee
+	feePreview, err := s.CalculateCampaignDeletionFee(ctx, campaignID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create deletion record
+	timestamp := time.Now()
+	deletionID := fmt.Sprintf("DEL_CAMP_%s_%d", campaignID, timestamp.Unix())
+
+	deletionRecord := DeletionRecord{
+		DeletionID:    deletionID,
+		EntityType:    "CAMPAIGN",
+		EntityID:      campaignID,
+		EntityName:    campaign.ProjectName,
+		OwnerID:       campaign.StartupID,
+		FeeCharged:    feePreview.FeeAmount,
+		FundsRaised:   campaign.FundsRaisedAmount,
+		FeePercentage: feePreview.FeePercentage,
+		Reason:        reason,
+		DeletedAt:     timestamp.Format(time.RFC3339),
+		TxID:          ctx.GetStub().GetTxID(),
+	}
+
+	// Create public deletion record (no sensitive data - no owner, no name, no funds details)
+	publicRecord := PublicDeletionRecord{
+		DeletionID: deletionID,
+		EntityType: "CAMPAIGN",
+		EntityID:   campaignID,
+		FeeCharged: feePreview.FeeAmount,
+		Reason:     reason,
+		DeletedAt:  timestamp.Format(time.RFC3339),
+		TxID:       ctx.GetStub().GetTxID(),
+	}
+
+	// Store PUBLIC record in world state (visible in CouchDB - no sensitive data)
+	publicJSON, err := json.Marshal(publicRecord)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal public deletion record: %v", err)
+	}
+	err = ctx.GetStub().PutState("DELETION_"+deletionID, publicJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store public deletion record: %v", err)
+	}
+
+	// Store FULL record in private collection (with all details)
+	deletionJSON, err := json.Marshal(deletionRecord)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal deletion record: %v", err)
+	}
+	err = ctx.GetStub().PutPrivateData(StartupPrivateCollection, "DELETION_"+deletionID, deletionJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to store private deletion record: %v", err)
+	}
+
+	// Delete campaign from private data
+	err = ctx.GetStub().DelPrivateData(StartupPrivateCollection, "CAMPAIGN_"+campaignID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete campaign: %v", err)
+	}
+
+	// Delete campaign private details
+	ctx.GetStub().DelPrivateData(StartupPrivateCollection, "CAMPAIGN_PRIVATE_"+campaignID)
+
+	// Remove from startup's campaign list
+	startup, _ := s.GetStartup(ctx, campaign.StartupID)
+	if startup != nil {
+		newCampaignIDs := []string{}
+		for _, cid := range startup.CampaignIDs {
+			if cid != campaignID {
+				newCampaignIDs = append(newCampaignIDs, cid)
+			}
+		}
+		startup.CampaignIDs = newCampaignIDs
+		startup.UpdatedAt = timestamp.Format(time.RFC3339)
+		startupJSON, _ := json.Marshal(startup)
+		ctx.GetStub().PutPrivateData(StartupPrivateCollection, "STARTUP_"+startup.StartupID, startupJSON)
+		ownerKey := fmt.Sprintf("OWNER_%s_%s", startup.OwnerID, startup.StartupID)
+		ctx.GetStub().PutPrivateData(StartupPrivateCollection, ownerKey, startupJSON)
+	}
+
+	return &deletionRecord, nil
+}
+
+// CalculateStartupDeletionFee calculates total fee for deleting a startup
+// Sum of individual campaign fees (60% each or 100 CFT if no funds)
+func (s *StartupContract) CalculateStartupDeletionFee(
+	ctx contractapi.TransactionContextInterface,
+	startupID string,
+) (*StartupDeletionFeeResult, error) {
+	startup, err := s.GetStartup(ctx, startupID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(startup.CampaignIDs) == 0 {
+		// No campaigns - fixed 100 CFT
+		return &StartupDeletionFeeResult{
+			TotalFee: 100.0,
+			CampaignFees: []DeletionFeePreview{{
+				EntityID:    startupID,
+				EntityType:  "STARTUP",
+				FundsRaised: 0,
+				FeeAmount:   100.0,
+				IsFixedFee:  true,
+			}},
+		}, nil
+	}
+
+	var totalFee float64
+	campaignFees := []DeletionFeePreview{}
+
+	for _, campaignID := range startup.CampaignIDs {
+		feePreview, err := s.CalculateCampaignDeletionFee(ctx, campaignID)
+		if err != nil {
+			// If campaign can't be found, add fixed fee
+			feePreview = &DeletionFeePreview{
+				EntityID:   campaignID,
+				EntityType: "CAMPAIGN",
+				FeeAmount:  100.0,
+				IsFixedFee: true,
+			}
+		}
+		totalFee += feePreview.FeeAmount
+		campaignFees = append(campaignFees, *feePreview)
+	}
+
+	return &StartupDeletionFeeResult{
+		TotalFee:     totalFee,
+		CampaignFees: campaignFees,
+	}, nil
+}
+
+// DeleteStartup deletes a startup and all its campaigns, recording fees
+func (s *StartupContract) DeleteStartup(
+	ctx contractapi.TransactionContextInterface,
+	startupID string,
+	reason string,
+) (*StartupDeletionResult, error) {
+	startup, err := s.GetStartup(ctx, startupID)
+	if err != nil {
+		return nil, fmt.Errorf("startup not found: %v", err)
+	}
+
+	timestamp := time.Now()
+	var campaignDeletions []DeletionRecord
+	var totalFee float64
+
+	// Delete all campaigns first
+	for _, campaignID := range startup.CampaignIDs {
+		campDeletion, err := s.DeleteCampaign(ctx, campaignID, reason+" (parent startup deleted)")
+		if err == nil {
+			campaignDeletions = append(campaignDeletions, *campDeletion)
+			totalFee += campDeletion.FeeCharged
+		}
+	}
+
+	// If no campaigns, fixed 100 CFT
+	if len(startup.CampaignIDs) == 0 {
+		totalFee = 100.0
+	}
+
+	// Create startup deletion record
+	deletionID := fmt.Sprintf("DEL_STU_%s_%d", startupID, timestamp.Unix())
+
+	startupDeletionRecord := DeletionRecord{
+		DeletionID:    deletionID,
+		EntityType:    "STARTUP",
+		EntityID:      startupID,
+		EntityName:    startup.Name,
+		OwnerID:       startup.OwnerID,
+		FeeCharged:    totalFee,
+		FundsRaised:   0, // Aggregated from campaigns
+		FeePercentage: 0, // Mixed
+		Reason:        reason,
+		DeletedAt:     timestamp.Format(time.RFC3339),
+		TxID:          ctx.GetStub().GetTxID(),
+	}
+
+	// Create public deletion record (no sensitive data)
+	publicRecord := PublicDeletionRecord{
+		DeletionID: deletionID,
+		EntityType: "STARTUP",
+		EntityID:   startupID,
+		FeeCharged: totalFee,
+		Reason:     reason,
+		DeletedAt:  timestamp.Format(time.RFC3339),
+		TxID:       ctx.GetStub().GetTxID(),
+	}
+
+	// Store PUBLIC record in world state (visible in CouchDB - no sensitive data)
+	publicJSON, _ := json.Marshal(publicRecord)
+	ctx.GetStub().PutState("DELETION_"+deletionID, publicJSON)
+
+	// Store FULL record in private collection (with all details)
+	deletionJSON, _ := json.Marshal(startupDeletionRecord)
+	ctx.GetStub().PutPrivateData(StartupPrivateCollection, "DELETION_"+deletionID, deletionJSON)
+
+	// Delete startup from private data
+	ctx.GetStub().DelPrivateData(StartupPrivateCollection, "STARTUP_"+startupID)
+
+	// Delete owner mapping
+	ownerKey := fmt.Sprintf("OWNER_%s_%s", startup.OwnerID, startupID)
+	ctx.GetStub().DelPrivateData(StartupPrivateCollection, ownerKey)
+
+	return &StartupDeletionResult{
+		StartupDeletion:   startupDeletionRecord,
+		CampaignDeletions: campaignDeletions,
+	}, nil
+}
+
+// GetDeletionRecord retrieves PUBLIC deletion record by ID (visible in CouchDB)
+// Contains: entityId, entityType, feeCharged, reason, deletedAt, txId
+// Does NOT contain: ownerID, entityName, fundsRaised (these are private)
+func (s *StartupContract) GetDeletionRecord(
+	ctx contractapi.TransactionContextInterface,
+	deletionID string,
+) (*PublicDeletionRecord, error) {
+	deletionJSON, err := ctx.GetStub().GetState("DELETION_" + deletionID)
+	if err != nil || deletionJSON == nil {
+		return nil, fmt.Errorf("deletion record not found: %s", deletionID)
+	}
+
+	var record PublicDeletionRecord
+	err = json.Unmarshal(deletionJSON, &record)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal deletion record: %v", err)
+	}
+
+	return &record, nil
+}
+
+// GetPrivateDeletionRecord retrieves FULL deletion record from private collection
+// Contains all details including ownerID, entityName, fundsRaised
+func (s *StartupContract) GetPrivateDeletionRecord(
+	ctx contractapi.TransactionContextInterface,
+	deletionID string,
+) (*DeletionRecord, error) {
+	deletionJSON, err := ctx.GetStub().GetPrivateData(StartupPrivateCollection, "DELETION_"+deletionID)
+	if err != nil || deletionJSON == nil {
+		return nil, fmt.Errorf("private deletion record not found: %s", deletionID)
+	}
+
+	var record DeletionRecord
+	err = json.Unmarshal(deletionJSON, &record)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal deletion record: %v", err)
+	}
+
+	return &record, nil
 }
 
 // ============================================================================
@@ -196,42 +718,43 @@ func (s *StartupContract) CreateCampaign(
 
 	// Create full campaign object
 	campaign := Campaign{
-		CampaignID:         campaignID,
-		StartupID:          startupID,
-		Category:           category,
-		Deadline:           deadline,
-		Currency:           currency,
-		HasRaised:          hasRaisedBool,
-		HasGovGrants:       hasGovGrantsBool,
-		IncorpDate:         incorpDate,
-		ProjectStage:       projectStage,
-		Sector:             sector,
-		Tags:               tags,
-		TeamAvailable:      teamAvailableBool,
-		InvestorCommitted:  investorCommittedBool,
-		Duration:           durationInt,
-		FundingDay:         fundingDayInt,
-		FundingMonth:       fundingMonthInt,
-		FundingYear:        fundingYearInt,
-		GoalAmount:         goalAmountFloat,
-		InvestmentRange:    investmentRange,
-		ProjectName:        projectName,
-		Description:        description,
-		Documents:          documents,
-		OpenDate:           openDate,
-		CloseDate:          closeDate,
-		FundsRaisedAmount:  0,
-		FundsRaisedPercent: 0,
-		Status:             "DRAFT",
-		ValidationStatus:   "NOT_SUBMITTED",
-		ValidationScore:    0,
-		ValidationHash:     "",
-		InvestorCount:      0,
-		PlatformStatus:     "NOT_PUBLISHED",
-		CreatedAt:          timestamp,
-		UpdatedAt:          timestamp,
-		ApprovedAt:         "",
-		PublishedAt:        "",
+		CampaignID:          campaignID,
+		StartupID:           startupID,
+		Category:            category,
+		Deadline:            deadline,
+		Currency:            currency,
+		HasRaised:           hasRaisedBool,
+		HasGovGrants:        hasGovGrantsBool,
+		IncorpDate:          incorpDate,
+		ProjectStage:        projectStage,
+		Sector:              sector,
+		Tags:                tags,
+		TeamAvailable:       teamAvailableBool,
+		InvestorCommitted:   investorCommittedBool,
+		Duration:            durationInt,
+		FundingDay:          fundingDayInt,
+		FundingMonth:        fundingMonthInt,
+		FundingYear:         fundingYearInt,
+		GoalAmount:          goalAmountFloat,
+		InvestmentRange:     investmentRange,
+		ProjectName:         projectName,
+		Description:         description,
+		Documents:           documents,
+		OpenDate:            openDate,
+		CloseDate:           closeDate,
+		FundsRaisedAmount:   0,
+		FundsRaisedPercent:  0,
+		Status:              "DRAFT",
+		ValidationStatus:    "NOT_SUBMITTED",
+		ValidationScore:     0,
+		SubmissionHash:      "",
+		ValidationProofHash: "",
+		InvestorCount:       0,
+		PlatformStatus:      "NOT_PUBLISHED",
+		CreatedAt:           timestamp,
+		UpdatedAt:           timestamp,
+		ApprovedAt:          "",
+		PublishedAt:         "",
 	}
 
 	// Store full campaign in StartupPrivateCollection
@@ -285,6 +808,12 @@ func (s *StartupContract) CreateCampaign(
 	err = ctx.GetStub().PutPrivateData(StartupPrivateCollection, "CAMPAIGN_PRIVATE_"+campaignID, privateJSON)
 	if err != nil {
 		return fmt.Errorf("failed to store private details: %v", err)
+	}
+
+	// Add campaign to startup's campaign list
+	err = s.AddCampaignToStartup(ctx, startupID, campaignID)
+	if err != nil {
+		return fmt.Errorf("failed to add campaign to startup: %v", err)
 	}
 
 	return nil
@@ -438,9 +967,9 @@ func (s *StartupContract) SubmitForValidation(
 	campaign.ValidationStatus = "PENDING_VALIDATION"
 	campaign.UpdatedAt = timestamp
 
-	// Generate campaign hash for validation
-	campaignHash := s.generateCampaignHash(campaign)
-	campaign.ValidationHash = campaignHash
+	// Generate campaign hash for validation (Submission Integrity)
+	campaignHash := s.generateSubmissionHash(campaign)
+	campaign.SubmissionHash = campaignHash
 
 	// Save updated campaign to private collection
 	campaignJSON, _ = json.Marshal(campaign)
@@ -465,7 +994,7 @@ func (s *StartupContract) SubmitForValidation(
 		"goalAmount":       campaign.GoalAmount,
 		"description":      campaign.Description,
 		"documents":        documents,
-		"validationHash":   campaignHash,
+		"submissionHash":   campaignHash, /* Was validationHash */
 		"validationStatus": campaign.ValidationStatus,
 		"submittedAt":      timestamp,
 	}
@@ -479,8 +1008,8 @@ func (s *StartupContract) SubmitForValidation(
 	return nil
 }
 
-// generateCampaignHash generates a hash for campaign verification
-func (s *StartupContract) generateCampaignHash(campaign Campaign) string {
+// generateSubmissionHash generates a hash for campaign verification (Submission)
+func (s *StartupContract) generateSubmissionHash(campaign Campaign) string {
 	data := fmt.Sprintf("%s|%s|%s|%s|%.2f|%s|%s",
 		campaign.CampaignID,
 		campaign.StartupID,
@@ -499,7 +1028,7 @@ func (s *StartupContract) generateCampaignHash(campaign Campaign) string {
 func (s *StartupContract) ShareCampaignToPlatform(
 	ctx contractapi.TransactionContextInterface,
 	campaignID string,
-	validationHash string,
+	validationProofHash string, /* Was validationHash */
 ) error {
 
 	// Get campaign from private collection
@@ -523,8 +1052,8 @@ func (s *StartupContract) ShareCampaignToPlatform(
 		if val, ok := statusUpdate["status"].(string); ok {
 			campaign.ValidationStatus = val
 		}
-		if val, ok := statusUpdate["validationHash"].(string); ok {
-			campaign.ValidationHash = val
+		if val, ok := statusUpdate["validationProofHash"].(string); ok {
+			campaign.ValidationProofHash = val
 		}
 		if val, ok := statusUpdate["riskLevel"].(string); ok {
 			campaign.RiskLevel = val
@@ -561,9 +1090,9 @@ func (s *StartupContract) ShareCampaignToPlatform(
 		return fmt.Errorf("failed to unmarshal validation status: %v", err)
 	}
 
-	validatorHash, ok := validationStatus["validationHash"].(string)
-	if !ok || validatorHash != validationHash {
-		return fmt.Errorf("validation hash mismatch. Cannot share with platform")
+	validatorHash, ok := validationStatus["validationProofHash"].(string)
+	if !ok || validatorHash != validationProofHash {
+		return fmt.Errorf("validation proof hash mismatch. Cannot share with platform")
 	}
 
 	timestamp := time.Now().Format(time.RFC3339)
@@ -595,12 +1124,12 @@ func (s *StartupContract) ShareCampaignToPlatform(
 		"documents":         campaign.Documents,
 
 		// Validation info
-		"validationHash":   validationHash,
-		"validationScore":  validationStatus["dueDiligenceScore"],
-		"riskScore":        validationStatus["riskScore"],
-		"riskLevel":        validationStatus["riskLevel"],
-		"validationStatus": campaign.ValidationStatus,
-		"sharedAt":         timestamp,
+		"validationProofHash": validationProofHash,
+		"validationScore":     validationStatus["dueDiligenceScore"],
+		"riskScore":           validationStatus["riskScore"],
+		"riskLevel":           validationStatus["riskLevel"],
+		"validationStatus":    campaign.ValidationStatus,
+		"sharedAt":            timestamp,
 	}
 
 	platformJSON, err := json.Marshal(platformData)
@@ -689,19 +1218,19 @@ func (s *StartupContract) SubmitForPublishing(
 
 	// Share with Platform via StartupPlatformCollection
 	platformData := map[string]interface{}{
-		"campaignId":      campaign.CampaignID,
-		"startupId":       campaign.StartupID,
-		"projectName":     campaign.ProjectName,
-		"description":     campaign.Description,
-		"category":        campaign.Category,
-		"goalAmount":      campaign.GoalAmount,
-		"currency":        campaign.Currency,
-		"openDate":        campaign.OpenDate,
-		"closeDate":       campaign.CloseDate,
-		"durationDays":    campaign.Duration,
-		"validationScore": campaign.ValidationScore,
-		"validationHash":  campaign.ValidationHash,
-		"submittedAt":     timestamp,
+		"campaignId":          campaign.CampaignID,
+		"startupId":           campaign.StartupID,
+		"projectName":         campaign.ProjectName,
+		"description":         campaign.Description,
+		"category":            campaign.Category,
+		"goalAmount":          campaign.GoalAmount,
+		"currency":            campaign.Currency,
+		"openDate":            campaign.OpenDate,
+		"closeDate":           campaign.CloseDate,
+		"durationDays":        campaign.Duration,
+		"validationScore":     campaign.ValidationScore,
+		"validationProofHash": campaign.ValidationProofHash,
+		"submittedAt":         timestamp,
 	}
 
 	platformDataJSON, _ := json.Marshal(platformData)
@@ -1156,8 +1685,8 @@ func (s *StartupContract) GetCampaign(ctx contractapi.TransactionContextInterfac
 		if val, ok := statusUpdate["status"].(string); ok {
 			campaign.ValidationStatus = val
 		}
-		if val, ok := statusUpdate["validationHash"].(string); ok {
-			campaign.ValidationHash = val
+		if val, ok := statusUpdate["validationProofHash"].(string); ok {
+			campaign.ValidationProofHash = val
 		}
 		if val, ok := statusUpdate["riskLevel"].(string); ok {
 			campaign.RiskLevel = val // Assuming RiskLevel exists in Campaign struct, otherwise ignore or map
@@ -1284,8 +1813,78 @@ func (s *StartupContract) GetAllCampaigns(ctx contractapi.TransactionContextInte
 			if val, ok := statusUpdate["status"].(string); ok {
 				campaign.ValidationStatus = val
 			}
-			if val, ok := statusUpdate["validationHash"].(string); ok {
-				campaign.ValidationHash = val
+			if val, ok := statusUpdate["validationProofHash"].(string); ok {
+				campaign.ValidationProofHash = val
+			}
+		}
+
+		// Ensure arrays are never null (fix schema validation)
+		if campaign.Tags == nil {
+			campaign.Tags = []string{}
+		}
+		if campaign.Documents == nil {
+			campaign.Documents = []string{}
+		}
+
+		campaigns = append(campaigns, campaign)
+	}
+
+	if campaigns == nil {
+		campaigns = []Campaign{}
+	}
+
+	return campaigns, nil
+}
+
+// GetCampaignsByStartupId retrieves campaigns created by a specific startup user
+// This enables strict user isolation - each user only sees their own campaigns
+func (s *StartupContract) GetCampaignsByStartupId(ctx contractapi.TransactionContextInterface, startupId string) ([]Campaign, error) {
+	// Validate input
+	if startupId == "" {
+		return []Campaign{}, nil
+	}
+
+	// Use GetPrivateDataByRange to iterate through all campaigns
+	resultsIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupPrivateCollection, "CAMPAIGN_", "CAMPAIGN_~")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get campaigns: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var campaigns []Campaign
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			continue
+		}
+
+		// Skip CAMPAIGN_PRIVATE_ keys - only process CAMPAIGN_{ID} keys
+		key := queryResponse.Key
+		if len(key) > 17 && key[:17] == "CAMPAIGN_PRIVATE_" {
+			continue
+		}
+
+		var campaign Campaign
+		err = json.Unmarshal(queryResponse.Value, &campaign)
+		if err != nil {
+			continue
+		}
+
+		// Filter by startupId - strict user isolation
+		if campaign.StartupID != startupId {
+			continue
+		}
+
+		// Get validation status updates
+		statusJSON, _ := ctx.GetStub().GetPrivateData(StartupValidatorCollection, "VALIDATION_STATUS_"+campaign.CampaignID)
+		if statusJSON != nil {
+			var statusUpdate map[string]interface{}
+			json.Unmarshal(statusJSON, &statusUpdate)
+			if val, ok := statusUpdate["status"].(string); ok {
+				campaign.ValidationStatus = val
+			}
+			if val, ok := statusUpdate["validationProofHash"].(string); ok {
+				campaign.ValidationProofHash = val
 			}
 		}
 
@@ -1451,4 +2050,3 @@ func (s *StartupContract) GetRequiredFees(
 
 	return string(feesJSON), nil
 }
-

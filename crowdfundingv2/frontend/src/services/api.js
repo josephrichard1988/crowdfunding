@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_BASE = '/api';
+const AUTH_API_BASE = 'http://localhost:3001/api/auth';
 
 const api = axios.create({
     baseURL: API_BASE,
@@ -9,11 +10,56 @@ const api = axios.create({
     },
 });
 
+// Auth API (for startup management, sync, and queue)
+const authApi = axios.create({
+    baseURL: AUTH_API_BASE,
+    headers: {
+        'Content-Type': 'application/json',
+    },
+});
+
+// Add auth token interceptor
+authApi.interceptors.request.use((config) => {
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+// Startup Management API (for STARTUP role)
+// Creates startups on chaincode via network API and syncs to MongoDB
+export const startupMgmtApi = {
+    // Create startup on chaincode (via network API)
+    createStartup: (data) => api.post('/startup/startups', data),
+    // Get startup by ID from chaincode
+    getStartup: (startupId) => api.get(`/startup/startups/${startupId}`),
+    // Get all startups for an owner from chaincode
+    getStartupsByOwner: (ownerId) => api.get(`/startup/startups/owner/${ownerId}`),
+    // Sync campaign to MongoDB
+    syncCampaign: (data) => authApi.post('/sync/campaign', data),
+
+    // Deletion APIs
+    getCampaignDeletionFee: (campaignId) => api.get(`/startup/campaigns/${campaignId}/deletion-fee`),
+    deleteCampaign: (campaignId, reason) => api.delete(`/startup/campaigns/${campaignId}`, { data: { reason } }),
+    getStartupDeletionFee: (startupId) => api.get(`/startup/startups/${startupId}/deletion-fee`),
+    deleteStartup: (startupId, reason) => api.delete(`/startup/startups/${startupId}`, { data: { reason } }),
+    getDeletionRecord: (deletionId) => api.get(`/startup/deletions/${deletionId}`),
+};
+
+// Queue Management API (for VALIDATOR/PLATFORM roles)
+export const queueApi = {
+    getQueue: () => authApi.get('/queue'),
+    getNextAllocation: (role) => authApi.get(`/allocation/next?role=${role}`),
+    assign: (data) => authApi.post('/allocation/assign', data),
+    complete: (data) => authApi.post('/allocation/complete', data),
+};
+
 // Startup API
 export const startupApi = {
     createCampaign: (data) => api.post('/startup/campaigns', data),
     getCampaign: (campaignId) => api.get(`/startup/campaigns/${campaignId}`),
-    getAllCampaigns: () => api.get('/startup/campaigns'),
+    getAllCampaigns: (startupId) => api.get(`/startup/campaigns${startupId ? `?startupId=${startupId}` : ''}`),
     submitForValidation: (campaignId, data) => api.post(`/startup/campaigns/${campaignId}/submit-validation`, data),
     shareToPlatform: (campaignId, data) => api.post(`/startup/campaigns/${campaignId}/share-to-platform`, data),
     checkPublishNotification: (campaignId) => api.get(`/startup/campaigns/${campaignId}/publish-notification`),
@@ -24,7 +70,7 @@ export const startupApi = {
 // Validator API
 export const validatorApi = {
     getCampaign: (campaignId) => api.get(`/validator/campaigns/${campaignId}`),
-    getPendingValidations: () => api.get('/validator/pending-validations'),
+    getPendingValidations: (validatorId) => api.get(`/validator/pending-validations${validatorId ? `?validatorId=${validatorId}` : ''}`),
     validateCampaign: (campaignId, data) => api.post(`/validator/validate/${campaignId}`, data),
     approveCampaign: (campaignId, data) => api.post(`/validator/approve/${campaignId}`, data),
     getValidationRequests: () => api.get('/validator/validation-requests'),
@@ -48,10 +94,11 @@ export const investorApi = {
     viewCampaignDetails: (campaignId) => api.get(`/investor/campaigns/${campaignId}`),
     viewCampaign: (campaignId, data) => api.post(`/investor/view/${campaignId}`, data),
     requestValidationDetails: (campaignId, data) => api.post(`/investor/request-validation/${campaignId}`, data),
-    getViewedCampaigns: () => api.get('/investor/viewed-campaigns'),
+    getViewedCampaigns: (investorId) => api.get(`/investor/viewed-campaigns${investorId ? `?investorId=${investorId}` : ''}`),
     makeInvestment: (data) => api.post('/investor/investments', data),
-    getMyInvestments: () => api.get('/investor/my-investments'),
+    getMyInvestments: (investorId) => api.get(`/investor/my-investments${investorId ? `?investorId=${investorId}` : ''}`),
     createProposal: (data) => api.post('/investor/proposals', data),
 };
 
+export { authApi };
 export default api;
