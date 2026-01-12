@@ -20,6 +20,7 @@ class FabricConnection {
      */
     async connect(orgKey) {
         if (this.gateways[orgKey]) {
+            logger.info(`🔗 Using cached connection for org: ${orgKey}`);
             return this.contracts[orgKey];
         }
 
@@ -66,9 +67,9 @@ class FabricConnection {
             await gateway.connect(connectionProfile, {
                 wallet,
                 identity: org.adminUser,
-                // Discovery enabled - required for Microfab URL translation (asLocalhost)
-                // In production, asLocalhost should be false
-                discovery: { enabled: true, asLocalhost: isDevelopment },
+                // Enable discovery with asLocalhost for .nip.io URL translation
+                // setEndorsingOrganizations in submitTransaction limits which orgs endorse
+                discovery: { enabled: true, asLocalhost: true },
                 eventHandlerOptions: {
                     commitTimeout: isDevelopment ? 30 : 300,
                     endorseTimeout: isDevelopment ? 30 : 300,
@@ -127,17 +128,98 @@ class FabricConnection {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
                 const contract = await this.getContract(orgKey);
-                logger.info(`📤 Submit: ${fcn} | Args: ${JSON.stringify(args).substring(0, 100)}... (attempt ${attempt})`);
 
-                // Get the org's MSP ID for endorsing
-                // For PDC transactions, we ONLY use the calling org's peer
-                // Cross-org endorsement causes mismatch because PDC data isn't synced immediately
-                const org = config.orgs[orgKey];
-                const endorsingOrgs = [org.mspId];
+                // Explicit MSP ID mapping for each org to ensure correct endorsement
+                const orgMspMap = {
+                    'startup': 'StartupOrgMSP',
+                    'investor': 'InvestorOrgMSP',
+                    'validator': 'ValidatorOrgMSP',
+                    'platform': 'PlatformOrgMSP'
+                };
+                const mspId = orgMspMap[orgKey] || config.orgs[orgKey]?.mspId;
 
-                // Create transaction with explicit endorsing orgs for PDC support
+                logger.info(`📤 Submit: ${fcn} | Org: ${orgKey} | MSP: ${mspId} | Args: ${JSON.stringify(args).substring(0, 100)}... (attempt ${attempt})`);
+
+                // Use 
+                //  to explicitly target the correct peer
+                // This is necessary because Microfab discovery ignores setEndorsingOrganizations
+                try {
+                    // Get network instance (must await if getting fresh)
+                    const gateway = this.gateways[orgKey];
+                    const network = await gateway.getNetwork(config.channelName);
+
+                    // Get channel and endorsers
+                    const channel = network.getChannel();
+                    const allEndorsers = channel.getEndorsers();
+
+                    // Filter for endorsers belonging to the target MSP
+                    let orgEndorsers = allEndorsers.filter(peer => peer.mspid === mspId);
+
+                    // If no endorsers found via discovery, try to get from connection profile explicit peers
+                    if (orgEndorsers.length === 0) {
+                        logger.warn(`⚠️ Discovery returned 0 endorsers for ${mspId}. Probing connection profile...`);
+                        try {
+                            const gateway = this.gateways[orgKey];
+                            // Access the internal connection options to get the profile
+                            // Note: This relies on internal SDK structure or we need to reload the profile
+                            // Safer way: Construct the expected Microfab peer name since we know the pattern
+                            // or read from the loaded profile if we saved it. 
+
+                            // Microfab pattern is usually: {orgNameLower}peer-api.127-0-0-1.nip.io:9090
+                            // But better to check the profile we loaded
+                            const orgConfig = config.orgs[orgKey];
+                            const profilePath = require('path').resolve(config.gatewaysDir, orgConfig.gatewayFile);
+                            const profile = require(profilePath);
+
+                            if (profile.organizations && profile.organizations[orgConfig.name] && profile.organizations[orgConfig.name].peers) {
+                                const peerNames = profile.organizations[orgConfig.name].peers;
+                                logger.info(`🔍 Found explicit peers in profile: ${peerNames.join(', ')}`);
+
+                                for (const peerName of peerNames) {
+                                    try {
+                                        const peer = channel.getEndorser(peerName);
+                                        // let peer = channel.getEndorser(peerName);
+                                        // // If channel doesn't know it (discovery failed), try getting it from the client directly
+                                        // if (!peer && channel.client) {
+                                        //     peer = channel.client.getEndorser(peerName, mspId);
+                                        // }
+                                        if (peer) {
+                                            orgEndorsers.push(peer);
+                                            logger.info(`✅ Successfully added peer by name: ${peerName}`);
+                                        }
+                                    } catch (e) {
+                                        logger.warn(`Failed to get endorser ${peerName}: ${e.message}`);
+                                    }
+                                }
+                            }
+                        } catch (err) {
+                            logger.warn(`❌ Failed to parse connection profile for backup peers: ${err.message}`);
+                        }
+                    }
+
+                    if (orgEndorsers.length > 0) {
+                        logger.info(`🎯 Found ${orgEndorsers.length} peer(s) for ${mspId}: ${orgEndorsers.map(p => p.name).join(', ')}`);
+                        // Set explicit endorsing peers
+                        const transaction = contract.createTransaction(fcn);
+                        transaction.setEndorsingPeers(orgEndorsers);
+
+                        const result = await transaction.submit(...args);
+                        const resultStr = result.toString();
+                        logger.info(`📥 Result: ${resultStr.substring(0, 100)}...`);
+
+                        if (!resultStr || resultStr === '') return { success: true };
+                        try { return JSON.parse(resultStr); } catch { return { success: true, message: resultStr }; }
+                    } else {
+                        logger.warn(`⚠️ No peers found for ${mspId}, falling back to setEndorsingOrganizations`);
+                    }
+                } catch (pe) {
+                    logger.warn(`⚠️ Peer lookup failed: ${pe.message}, falling back`);
+                }
+
+                // Fallback (or if peer lookup failed)
                 const transaction = contract.createTransaction(fcn);
-                transaction.setEndorsingOrganizations(...endorsingOrgs);
+                transaction.setEndorsingOrganizations(mspId);
+                logger.info(`🎯 Endorsing organizations set to: ${mspId}`);
 
                 const result = await transaction.submit(...args);
                 const resultStr = result.toString();
@@ -195,6 +277,21 @@ class FabricConnection {
         } catch (error) {
             logger.error(`❌ Query failed: ${error.message}`);
             throw error;
+        }
+    }
+
+    /**
+     * Parse transaction result
+     */
+    _parseResult(result) {
+        const resultStr = result.toString();
+        if (!resultStr || resultStr === '') {
+            return { success: true };
+        }
+        try {
+            return JSON.parse(resultStr);
+        } catch {
+            return { success: true, message: resultStr };
         }
     }
 

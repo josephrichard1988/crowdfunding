@@ -349,6 +349,35 @@ router.post('/sync/campaign-status', authMiddleware, async (req, res) => {
     }
 });
 
+// Update startup status (e.g. for deletion)
+router.post('/sync/startup-status', authMiddleware, async (req, res) => {
+    try {
+        const { startupId, status } = req.body;
+
+        const user = await User.findById(req.user.userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Find the startup
+        const startup = user.startups.find(s => s.startupId === startupId);
+        if (!startup) {
+            return res.status(404).json({ error: 'Startup not found' });
+        }
+
+        // Update status
+        if (status) startup.status = status;
+
+        await user.save();
+        console.log(`[SYNC] Startup ${startupId} updated: status=${status}`);
+
+        res.json({ success: true, message: 'Startup status updated' });
+    } catch (error) {
+        console.error('Sync startup status error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // ============================================================================
 // ALLOCATION MANAGEMENT (for VALIDATOR/PLATFORM assignment)
 // ============================================================================

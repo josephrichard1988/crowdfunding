@@ -38,12 +38,24 @@ export const startupMgmtApi = {
     getStartupsByOwner: (ownerId) => api.get(`/startup/startups/owner/${ownerId}`),
     // Sync campaign to MongoDB
     syncCampaign: (data) => authApi.post('/sync/campaign', data),
+    // Sync startup to chaincode (recreate in chaincode from MongoDB data)
+    syncToChaincode: (startupId, data) => api.post(`/startup/startups/${startupId}/sync-to-chaincode`, data),
 
     // Deletion APIs
     getCampaignDeletionFee: (campaignId) => api.get(`/startup/campaigns/${campaignId}/deletion-fee`),
-    deleteCampaign: (campaignId, reason) => api.delete(`/startup/campaigns/${campaignId}`, { data: { reason } }),
+    deleteCampaign: (campaignId, reason, startupId) => {
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        return api.delete(`/startup/campaigns/${campaignId}`, {
+            data: { reason, authToken: token, startupId }
+        });
+    },
     getStartupDeletionFee: (startupId) => api.get(`/startup/startups/${startupId}/deletion-fee`),
-    deleteStartup: (startupId, reason) => api.delete(`/startup/startups/${startupId}`, { data: { reason } }),
+    deleteStartup: (startupId, reason) => {
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        return api.delete(`/startup/startups/${startupId}`, {
+            data: { reason, authToken: token, startupId }
+        });
+    },
     getDeletionRecord: (deletionId) => api.get(`/startup/deletions/${deletionId}`),
 };
 

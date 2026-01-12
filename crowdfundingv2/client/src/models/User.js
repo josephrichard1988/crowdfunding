@@ -42,6 +42,7 @@ const userSchema = new mongoose.Schema({
         displayId: { type: String },                      // S-001, S-002
         name: { type: String, required: true },
         description: { type: String },
+        status: { type: String, default: 'ACTIVE' },
         createdAt: { type: Date, default: Date.now },
         campaigns: [{
             campaignId: { type: String, required: true }, // CAMP_{startupId}_{seq}

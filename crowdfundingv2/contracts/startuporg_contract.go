@@ -413,26 +413,8 @@ func (s *StartupContract) DeleteCampaign(
 		TxID:          ctx.GetStub().GetTxID(),
 	}
 
-	// Create public deletion record (no sensitive data - no owner, no name, no funds details)
-	publicRecord := PublicDeletionRecord{
-		DeletionID: deletionID,
-		EntityType: "CAMPAIGN",
-		EntityID:   campaignID,
-		FeeCharged: feePreview.FeeAmount,
-		Reason:     reason,
-		DeletedAt:  timestamp.Format(time.RFC3339),
-		TxID:       ctx.GetStub().GetTxID(),
-	}
-
-	// Store PUBLIC record in world state (visible in CouchDB - no sensitive data)
-	publicJSON, err := json.Marshal(publicRecord)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal public deletion record: %v", err)
-	}
-	err = ctx.GetStub().PutState("DELETION_"+deletionID, publicJSON)
-	if err != nil {
-		return nil, fmt.Errorf("failed to store public deletion record: %v", err)
-	}
+	// Public deletion record removed to avoid "Private Read / Public Write" conflict
+	// The full deletion details are preserved in the StartupPrivateCollection below.
 
 	// Store FULL record in private collection (with all details)
 	deletionJSON, err := json.Marshal(deletionRecord)
@@ -534,7 +516,8 @@ func (s *StartupContract) DeleteStartup(
 	}
 
 	timestamp := time.Now()
-	var campaignDeletions []DeletionRecord
+	// var campaignDeletions []DeletionRecord
+	campaignDeletions := []DeletionRecord{}
 	var totalFee float64
 
 	// Delete all campaigns first
@@ -1724,55 +1707,56 @@ func (s *StartupContract) GetCampaign(ctx contractapi.TransactionContextInterfac
 	}
 
 	// 4. Calculate Funds Raised from StartupInvestorCollection
-	// We need to iterate over investments for this campaign.
-	// Since we can't easily query by partial key in private data without an index or knowing IDs,
-	// checking if we have a "INVESTMENT_INDEX" or similar would be best.
-	// However, for now, we'll try a range query if supported in private data (GetPrivateDataByRange).
+	// OPTIMIZATION: Removed GetPrivateDataByRange to prevent "Phantom Read" protection
+	// which blocks subsequent PutPrivateData calls in the same transaction (e.g. DeleteCampaign).
+	// We rely on campaign.FundsRaisedAmount being updated by the investment logic.
 
-	investmentIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupInvestorCollection, "INVESTMENT_", "INVESTMENT_~")
-	if err == nil {
-		defer investmentIterator.Close()
+	/*
+		investmentIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupInvestorCollection, "INVESTMENT_", "INVESTMENT_~")
+		if err == nil {
+			defer investmentIterator.Close()
 
-		var totalRaised float64
-		// simple set to count unique investors
-		uniqueInvestors := make(map[string]bool)
+			var totalRaised float64
+			// simple set to count unique investors
+			uniqueInvestors := make(map[string]bool)
 
-		for investmentIterator.HasNext() {
-			response, err := investmentIterator.Next()
-			if err != nil {
-				continue
-			}
+			for investmentIterator.HasNext() {
+				response, err := investmentIterator.Next()
+				if err != nil {
+					continue
+				}
 
-			var investment map[string]interface{}
-			if err := json.Unmarshal(response.Value, &investment); err != nil {
-				continue
-			}
+				var investment map[string]interface{}
+				if err := json.Unmarshal(response.Value, &investment); err != nil {
+					continue
+				}
 
-			// Check if this investment belongs to the current campaign
-			if invCampaignID, ok := investment["campaignId"].(string); ok && invCampaignID == campaignID {
-				// Check status
-				if status, ok := investment["status"].(string); ok && (status == "COMMITTED" || status == "RELEASED") {
-					if amount, ok := investment["amount"].(float64); ok {
-						totalRaised += amount
-					}
-					if invID, ok := investment["investorId"].(string); ok {
-						uniqueInvestors[invID] = true
+				// Check if this investment belongs to the current campaign
+				if invCampaignID, ok := investment["campaignId"].(string); ok && invCampaignID == campaignID {
+					// Check status
+					if status, ok := investment["status"].(string); ok && (status == "COMMITTED" || status == "RELEASED") {
+						if amount, ok := investment["amount"].(float64); ok {
+							totalRaised += amount
+						}
+						if invID, ok := investment["investorId"].(string); ok {
+							uniqueInvestors[invID] = true
+						}
 					}
 				}
 			}
-		}
 
-		campaign.FundsRaisedAmount = totalRaised
-		campaign.InvestorCount = len(uniqueInvestors)
-		if campaign.GoalAmount > 0 {
-			campaign.FundsRaisedPercent = (totalRaised / campaign.GoalAmount) * 100
-		}
+			campaign.FundsRaisedAmount = totalRaised
+			campaign.InvestorCount = len(uniqueInvestors)
+			if campaign.GoalAmount > 0 {
+				campaign.FundsRaisedPercent = (totalRaised / campaign.GoalAmount) * 100
+			}
 
-		// Map boolean flags if raised > 0
-		if totalRaised > 0 {
-			campaign.HasRaised = true
+			// Map boolean flags if raised > 0
+			if totalRaised > 0 {
+				campaign.HasRaised = true
+			}
 		}
-	}
+	*/
 
 	return &campaign, nil
 }

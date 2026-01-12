@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { startupApi, startupMgmtApi } from '../services/api';
-import { Plus, FileText, Share2, Bell, Loader2, RefreshCw, X, Rocket, Wallet, AlertCircle, LogIn, Coins, CreditCard, CheckCircle, Building2 } from 'lucide-react';
+import { Plus, FileText, Share2, Bell, Loader2, RefreshCw, X, Rocket, Wallet, AlertCircle, LogIn, Coins, CreditCard, CheckCircle, Building2, Trash2, AlertTriangle } from 'lucide-react';
 
 // Token fee constants (in CFT) - All paid by Startup
 const FEES = {
@@ -32,6 +32,13 @@ export default function StartupDashboard() {
     const [showCreateStartupModal, setShowCreateStartupModal] = useState(false);
     const [newStartupName, setNewStartupName] = useState('');
     const [newStartupDesc, setNewStartupDesc] = useState('');
+
+    // Delete modal state
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteTarget, setDeleteTarget] = useState(null);
+    const [deletionFee, setDeletionFee] = useState(null);
+    const [deleteReason, setDeleteReason] = useState('');
+    const [deleting, setDeleting] = useState(false);
 
     const [formData, setFormData] = useState({
         // 22 Parameters for campaign creation
@@ -67,54 +74,59 @@ export default function StartupDashboard() {
     const isStartupUser = isAuthenticated && user?.role === 'STARTUP';
     const isPreviewMode = !isAuthenticated || user?.role !== 'STARTUP';
 
-    // Fetch startups and campaigns
-    const fetchData = async () => {
+    // Fetch startups only (for list)
+    const fetchStartups = async () => {
         if (!isStartupUser) return;
-
         setLoading(true);
         try {
-            // Fetch user's startups from chaincode
-            let userStartups = [];
-            try {
-                const startupsRes = await startupMgmtApi.getStartupsByOwner(user.orgUserId);
-                userStartups = startupsRes.data?.data || [];
-            } catch (e) {
-                console.warn('Failed to fetch startups:', e.message);
-            }
+            const startupsRes = await startupMgmtApi.getStartupsByOwner(user.orgUserId);
+            const userStartups = startupsRes.data?.data || [];
             setStartups(userStartups);
 
-            // Auto-select first startup if none selected
+            // Auto-select first if needed and not already selected
             if (userStartups.length > 0 && !selectedStartup) {
                 setSelectedStartup(userStartups[0]);
             }
-
-            // Fetch campaigns for selected startup (or all user campaigns)
-            try {
-                const startupIdToQuery = selectedStartup?.startupId || user?.orgUserId;
-                const res = await startupApi.getAllCampaigns(startupIdToQuery);
-                setCampaigns(res.data?.data || []);
-            } catch (e) {
-                console.warn('Failed to fetch campaigns:', e.message);
-                setCampaigns([]);
-            }
-            setError(null);
         } catch (err) {
-            setCampaigns([]);
-            setStartups([]);
-            console.error(err);
+            console.warn('Failed to fetch startups:', err.message);
         } finally {
             setLoading(false);
         }
     };
 
-    useEffect(() => {
-        if (isStartupUser) {
-            fetchData();
-        } else {
-            // In preview mode, don't show loading spinner
+    // Fetch campaigns for the CURRENTLY selected startup
+    const fetchCampaigns = async () => {
+        if (!selectedStartup) {
+            setCampaigns([]);
+            return;
+        }
+        setLoading(true);
+        try {
+            const res = await startupApi.getAllCampaigns(selectedStartup.startupId);
+            setCampaigns(res.data?.data || []);
+        } catch (err) {
+            console.warn('Failed to fetch campaigns:', err.message);
+            setCampaigns([]);
+        } finally {
             setLoading(false);
         }
-    }, [isStartupUser, user?.orgUserId, selectedStartup?.startupId]);
+    };
+
+    // Effect 1: Fetch Startups on mount (or user change)
+    useEffect(() => {
+        if (isStartupUser) {
+            fetchStartups();
+        } else {
+            setLoading(false);
+        }
+    }, [isStartupUser, user?.orgUserId]);
+
+    // Effect 2: Fetch Campaigns when selection changes
+    useEffect(() => {
+        if (isStartupUser && selectedStartup) {
+            fetchCampaigns();
+        }
+    }, [selectedStartup?.startupId]);
 
     // Create a new startup
     const handleCreateStartup = async () => {
@@ -215,7 +227,7 @@ export default function StartupDashboard() {
                 investmentRange: '10K-100K',
                 documents: '',
             });
-            fetchData();
+            fetchCampaigns();
 
             // Show success with auto-generated ID
             if (result.data?.data?.displayId) {
@@ -283,10 +295,15 @@ export default function StartupDashboard() {
                 alert(`Payment of ${pendingAction.fee} CFT confirmed! Campaign shared to platform (auto-assigned to publisher).`);
             }
 
-            fetchData();
+            fetchCampaigns();
         } catch (err) {
             console.error('Failed:', err);
-            alert('Failed: ' + err.message);
+
+            // Revert wallet deduction on failure
+            const originalBalance = cftBalance + pendingAction.fee;
+            await updateWallet({ cftBalance: originalBalance });
+
+            alert('Transaction failed: ' + err.message + '. Wallet balance reverted.');
         } finally {
             setProcessing(false);
             setShowPaymentModal(false);
@@ -299,6 +316,71 @@ export default function StartupDashboard() {
         setPendingAction(null);
     };
 
+    const initiateDeleteStartup = async (e, startup) => {
+        e.stopPropagation(); // Prevent navigation
+        try {
+            setDeleteTarget({
+                id: startup.startupId,
+                name: startup.name
+            });
+            const res = await startupMgmtApi.getStartupDeletionFee(startup.startupId);
+            setDeletionFee(res.data?.data || { feeAmount: 100 });
+            setShowDeleteModal(true);
+        } catch (err) {
+            setDeletionFee({ feeAmount: 100, isFixedFee: false });
+            setShowDeleteModal(true);
+        }
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteTarget) return;
+
+        // Check balance
+        const requiredFee = deletionFee?.feeAmount || 100;
+        if (cftBalance < requiredFee) {
+            alert(`⚠️ Insufficient Balance!\n\nYou have: ${cftBalance} CFT\nRequired: ${requiredFee} CFT\n\nPlease top up your wallet to perform this deletion.`);
+            return;
+        }
+
+        setDeleting(true);
+        try {
+            let fee = deletionFee?.feeAmount || 100;
+            const res = await startupMgmtApi.deleteStartup(deleteTarget.id, deleteReason || 'User requested deletion');
+            if (res.data?.data?.StartupDeletion?.feeCharged) {
+                // fee = res.data.data.StartupDeletion.feeCharged;
+            }
+
+            // Update wallet
+            if (updateWallet) {
+                await updateWallet({ cftBalance: cftBalance - fee });
+            }
+
+            alert(`Startup "${deleteTarget.name}" deleted successfully.`);
+            setShowDeleteModal(false);
+            setDeleteTarget(null);
+            setDeletionFee(null);
+            setDeleteReason('');
+            // Remove from local list to avoid full fetch
+            setStartups(prev => prev.filter(s => s.startupId !== deleteTarget.id));
+            if (selectedStartup?.startupId === deleteTarget.id) {
+                setSelectedStartup(null);
+                setCampaigns([]);
+            }
+        } catch (err) {
+            alert('Delete failed: ' + err.message);
+        } finally {
+            setDeleting(false);
+        }
+    };
+
+    const cancelDelete = () => {
+        setShowDeleteModal(false);
+        setDeleteTarget(null);
+        setDeletionFee(null);
+        setDeleteReason('');
+        setDeleting(false);
+    };
+
     const getStatusBadge = (status) => {
         const badges = {
             DRAFT: 'badge-info',
@@ -309,6 +391,14 @@ export default function StartupDashboard() {
         };
         return badges[status] || 'badge-info';
     };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center py-20">
+                <Loader2 className="animate-spin text-primary-600" size={48} />
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -404,7 +494,7 @@ export default function StartupDashboard() {
                             <span className="font-medium">{cftBalance.toLocaleString()} CFT</span>
                         </Link>
                     )}
-                    <button onClick={fetchData} className="btn btn-secondary flex items-center gap-2">
+                    <button onClick={() => { fetchStartups(); fetchCampaigns(); }} className="btn btn-secondary flex items-center gap-2">
                         <RefreshCw size={18} />
                         Refresh
                     </button>
@@ -622,6 +712,13 @@ export default function StartupDashboard() {
                                             <h3 className="font-bold text-gray-900 dark:text-white">{startup.name}</h3>
                                             <p className="text-xs text-gray-500 mt-1">ID: {startup.displayId || startup.startupId}</p>
                                         </div>
+                                        <button
+                                            onClick={(e) => initiateDeleteStartup(e, startup)}
+                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+                                            title="Delete Startup"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
                                     </div>
                                     {startup.description && (
                                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
@@ -690,6 +787,75 @@ export default function StartupDashboard() {
                             >
                                 <Plus size={18} />
                                 Create Startup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {/* Delete Confirmation Modal */}
+            {showDeleteModal && deleteTarget && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full">
+                        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                            <div className="flex items-center gap-3">
+                                <div className="p-3 bg-red-100 dark:bg-red-900 rounded-full">
+                                    <AlertTriangle className="text-red-600" size={24} />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Delete Startup?</h2>
+                                    <p className="text-sm text-gray-500">This action cannot be undone</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg border border-red-100 dark:border-red-900/50">
+                                <p className="text-red-800 dark:text-red-200 font-medium">
+                                    You are about to delete "{deleteTarget.name}"
+                                </p>
+                                <p className="text-red-600 dark:text-red-300 text-sm mt-1">
+                                    This will also delete ALL campaigns associated with this startup.
+                                </p>
+                            </div>
+
+                            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-gray-600 dark:text-gray-400">Deletion Fee</span>
+                                    <span className="text-xl font-bold text-red-600">
+                                        {deletionFee?.feeAmount || 100} CFT
+                                    </span>
+                                </div>
+                                <div className="text-xs text-gray-400 mt-1">
+                                    {deletionFee?.isFixedFee ? 'Fixed fee (no funds raised)' : 'Based on funds raised'}
+                                </div>
+                                {cftBalance < (deletionFee?.feeAmount || 100) && (
+                                    <div className="mt-2 p-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs rounded">
+                                        Insufficient balance to proceed.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Reason (optional)
+                                </label>
+                                <textarea
+                                    value={deleteReason}
+                                    onChange={(e) => setDeleteReason(e.target.value)}
+                                    placeholder="Why are you deleting this?"
+                                    rows={2}
+                                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+                                />
+                            </div>
+                        </div>
+                        <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+                            <button onClick={cancelDelete} className="btn btn-secondary">Cancel</button>
+                            <button
+                                onClick={confirmDelete}
+                                disabled={deleting}
+                                className="btn bg-red-600 text-white hover:bg-red-700 flex items-center gap-2"
+                            >
+                                {deleting ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                                Confirm Delete
                             </button>
                         </div>
                     </div>

@@ -43,7 +43,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || config.port;
 app.listen(PORT, () => {
     console.log(`🔐 Authentication Server running on port ${PORT}`);
-    console.log(`📊 MongoDB: Connected`);
+    console.log(`📊 MongoDB: Connecting.....`);
     console.log(`⚠️  This server handles AUTH ONLY - Fabric API is on port 4000`);
 });
 

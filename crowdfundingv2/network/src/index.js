@@ -130,7 +130,51 @@ app.post('/api/startup/startups', async (req, res) => {
     }
 });
 
-// Get startup by ID
+// Sync startup to chaincode (recreate from MongoDB data when chaincode is reset)
+app.post('/api/startup/startups/:startupId/sync-to-chaincode', async (req, res) => {
+    try {
+        const { startupId } = req.params;
+        const { name, description, ownerId, displayId } = req.body;
+
+        if (!name || !ownerId || !startupId) {
+            return res.status(400).json({ success: false, error: 'startupId, name, and ownerId are required' });
+        }
+
+        logger.info(`Syncing startup ${startupId} to chaincode for owner ${ownerId}`);
+
+        // First check if startup already exists in chaincode
+        try {
+            await fabricConnection.evaluateTransaction(
+                'startup', 'StartupContract', 'GetStartup', startupId
+            );
+            // If we reach here, startup already exists in chaincode
+            return res.json({ success: true, message: 'Startup already exists in chaincode', alreadyExists: true });
+        } catch (existsErr) {
+            // Startup not found, we can create it
+            if (!existsErr.message.includes('not found')) {
+                throw existsErr;
+            }
+        }
+
+        // Create in Fabric chaincode
+        await fabricConnection.submitTransaction(
+            'startup', 'StartupContract', 'CreateStartup',
+            startupId, ownerId, name, description || '', displayId || startupId.split('_').pop()
+        );
+
+        logger.info(`Successfully synced startup ${startupId} to chaincode`);
+
+        res.json({
+            success: true,
+            message: 'Startup synced to chaincode successfully',
+            data: { startupId, name, ownerId, displayId }
+        });
+    } catch (error) {
+        logger.error('Sync startup to chaincode error:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 app.get('/api/startup/startups/:startupId', async (req, res) => {
     try {
         const { startupId } = req.params;
@@ -181,7 +225,7 @@ app.get('/api/startup/campaigns/:campaignId/deletion-fee', async (req, res) => {
 app.delete('/api/startup/campaigns/:campaignId', async (req, res) => {
     try {
         const { campaignId } = req.params;
-        const { reason } = req.body;
+        const { reason, authToken, startupId } = req.body;
 
         logger.info(`Deleting campaign ${campaignId}. Reason: ${reason || 'Not provided'}`);
 
@@ -189,6 +233,26 @@ app.delete('/api/startup/campaigns/:campaignId', async (req, res) => {
             'startup', 'StartupContract', 'DeleteCampaign',
             campaignId, reason || 'User requested deletion'
         );
+
+        // Sync deletion status to MongoDB
+        if (authToken && startupId) {
+            try {
+                logger.info(`Syncing deletion status for campaign ${campaignId} to MongoDB`);
+                await axios.post(`${AUTH_API_BASE}/sync/campaign-status`, {
+                    startupId,
+                    campaignId,
+                    status: 'DELETED'
+                }, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+                logger.info(`Campaign ${campaignId} marked as DELETED in MongoDB`);
+            } catch (syncError) {
+                logger.warn(`MongoDB deletion sync failed: ${syncError.message} - ${JSON.stringify(syncError.response?.data || {})}`);
+                // Don't fail the response if sync fails, but log it warning
+            }
+        } else {
+            logger.warn(`Skipping MongoDB sync for deletion of ${campaignId}: authToken or startupId missing`);
+        }
 
         res.json({
             success: true,
@@ -219,7 +283,7 @@ app.get('/api/startup/startups/:startupId/deletion-fee', async (req, res) => {
 app.delete('/api/startup/startups/:startupId', async (req, res) => {
     try {
         const { startupId } = req.params;
-        const { reason } = req.body;
+        const { reason, authToken } = req.body;
 
         logger.info(`Deleting startup ${startupId} and all campaigns. Reason: ${reason || 'Not provided'}`);
 
@@ -228,12 +292,58 @@ app.delete('/api/startup/startups/:startupId', async (req, res) => {
             startupId, reason || 'User requested deletion'
         );
 
+        // Sync deletion status for ALL campaigns of this startup?
+        // Or simply delete the startup record?
+        // Since we don't have a specific endpoint for startup deletion sync, 
+        // we might rely on the frontend or backend to handle cascade.
+        // However, if we just want to mark the STARTUP as deleted?
+        // The user asked to update "whichever campaign or startup is deleted".
+        // I will assume there is a sync endpoint for startup status or I should try to iterate?
+        // The `result` from DeleteStartup return deleted campaigns. I could sync each one?
+        // Or better: call a sync endpoint for startup deletion if it exists.
+        // I'll try calling `/sync/startup-status`?
+        // I'll stick to trying to mark campaigns as deleted if I can, OR just warn if I can't sync startup deletion.
+        // Wait, `result` contains `CampaignDeletions` list.
+
+        if (authToken && result.campaignDeletions && result.campaignDeletions.length > 0) {
+            logger.info(`Syncing deletion status for ${result.campaignDeletions.length} campaigns to MongoDB`);
+            for (const delRecord of result.campaignDeletions) {
+                try {
+                    await axios.post(`${AUTH_API_BASE}/sync/campaign-status`, {
+                        startupId,
+                        campaignId: delRecord.entityId,
+                        status: 'DELETED'
+                    }, {
+                        headers: { Authorization: `Bearer ${authToken}` }
+                    });
+                } catch (e) {
+                    logger.warn(`Failed to sync deletion for campaign ${delRecord.entityId}: ${e.message}`);
+                }
+            }
+        }
+
+        // Sync STARTUP deletion status
+        if (authToken) {
+            try {
+                logger.info(`Syncing deletion status for startup ${startupId} to MongoDB`);
+                await axios.post(`${AUTH_API_BASE}/sync/startup-status`, {
+                    startupId,
+                    status: 'DELETED'
+                }, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+            } catch (e) {
+                logger.warn(`Failed to sync deletion for startup ${startupId}: ${e.message}`);
+            }
+        }
+
         res.json({
             success: true,
             data: result,
             message: `Startup ${startupId} and all campaigns deleted successfully`
         });
     } catch (error) {
+
         logger.error('Delete startup error:', error);
         res.status(500).json({ success: false, error: error.message });
     }
@@ -348,6 +458,32 @@ app.post('/api/startup/campaigns/:campaignId/submit-validation', async (req, res
     try {
         const { documents, notes, authToken, startupId, projectName } = req.body;
 
+        // 0. CHECK IF VALIDATOR IS AVAILABLE
+        // If authToken is provided, we check allocation first to prevent "submitted to void" state
+        if (authToken) {
+            try {
+                // Peek if any validator is available
+                await axios.get(`${AUTH_API_BASE}/allocation/next?role=VALIDATOR`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+            } catch (checkError) {
+                if (checkError.response?.status === 404) {
+                    logger.warn('Pre-check failed: No ACTIVE validators available');
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Cannot submit: No active VALIDATOR users found in the system to review this campaign.'
+                    });
+                }
+                // Determine if we should block or proceed on other errors (e.g., Auth API down)
+                // For safety, let's block if we can't verify availability
+                logger.warn(`Validator availability check failed: ${checkError.message}`);
+                return res.status(503).json({
+                    success: false,
+                    error: 'Unable to verify validator availability. Please try again later.'
+                });
+            }
+        }
+
         // 1. Submit to Fabric
         const result = await fabricConnection.submitTransaction(
             'startup', 'StartupContract', 'SubmitForValidation',
@@ -410,6 +546,27 @@ app.post('/api/startup/campaigns/:campaignId/submit-validation', async (req, res
 app.post('/api/startup/campaigns/:campaignId/share-to-platform', async (req, res) => {
     try {
         const { validationProofHash, authToken, startupId, projectName } = req.body;
+
+        // 0. CHECK IF PLATFORM USER IS AVAILABLE
+        if (authToken) {
+            try {
+                await axios.get(`${AUTH_API_BASE}/allocation/next?role=PLATFORM`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+            } catch (checkError) {
+                if (checkError.response?.status === 404) {
+                    logger.warn('Pre-check failed: No ACTIVE platform users available');
+                    return res.status(400).json({
+                        success: false,
+                        error: 'Cannot share: No active PLATFORM users found to publish this campaign.'
+                    });
+                }
+                return res.status(503).json({
+                    success: false,
+                    error: 'Unable to verify platform availability. Please try again later.'
+                });
+            }
+        }
 
         // 1. Share to Fabric
         const result = await fabricConnection.submitTransaction(

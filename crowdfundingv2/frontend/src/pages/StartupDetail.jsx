@@ -64,15 +64,16 @@ export default function StartupDetail() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // Fetch startup details
+            // Fetch startup from chaincode (source of truth)
             try {
                 const startupRes = await startupMgmtApi.getStartup(startupId);
                 setStartup(startupRes.data?.data || null);
             } catch (e) {
-                console.warn('Failed to fetch startup:', e.message);
+                console.warn('Startup not found in chaincode:', e.message);
+                setStartup(null);
             }
 
-            // Fetch campaigns for this startup
+            // Fetch campaigns for this startup from chaincode
             try {
                 const campaignsRes = await startupApi.getAllCampaigns(startupId);
                 setCampaigns(campaignsRes.data?.data || []);
@@ -264,16 +265,37 @@ export default function StartupDetail() {
 
         setDeleting(true);
         try {
+            let fee = deletionFee?.feeAmount || 100;
+
             if (deleteTarget.type === 'campaign') {
-                await startupMgmtApi.deleteCampaign(deleteTarget.id, deleteReason || 'User requested deletion');
-                alert(`Campaign "${deleteTarget.name}" deleted. Fee charged: ${deletionFee?.feeAmount || 100} CFT`);
+                const res = await startupMgmtApi.deleteCampaign(deleteTarget.id, deleteReason || 'User requested deletion', startupId);
+                if (res.data?.data?.feeCharged) {
+                    fee = res.data.data.feeCharged;
+                }
+                alert(`Campaign "${deleteTarget.name}" deleted. Fee charged: ${fee} CFT`);
             }
             if (deleteTarget.type === 'startup') {
-                await startupMgmtApi.deleteStartup(deleteTarget.id, deleteReason || 'User requested deletion');
-                alert(`Startup "${deleteTarget.name}" and all campaigns deleted. Fee charged: ${deletionFee?.feeAmount || 100} CFT`);
+                const res = await startupMgmtApi.deleteStartup(deleteTarget.id, deleteReason || 'User requested deletion');
+                // For startup, the deletion record might be nested, but deletionFee.feeAmount is reliable enough for total
+                if (res.data?.data?.StartupDeletion?.feeCharged) {
+                    // If the structure matches, use it. But simple fallback is safe.
+                }
+                alert(`Startup "${deleteTarget.name}" and all campaigns deleted. Fee charged: ${fee} CFT`);
+
+                // Update wallet before navigating
+                if (updateWallet) {
+                    await updateWallet({ cftBalance: cftBalance - fee });
+                }
+
                 navigate('/startup'); // Redirect to dashboard
                 return;
             }
+
+            // Update wallet for campaign deletion
+            if (updateWallet) {
+                await updateWallet({ cftBalance: cftBalance - fee });
+            }
+
             setShowDeleteModal(false);
             setDeleteTarget(null);
             setDeletionFee(null);
@@ -428,7 +450,7 @@ export default function StartupDetail() {
                                             </div>
                                         </td>
                                         <td className="py-4 px-4">
-                                            <div className="flex flex-col gap-1">
+                                            <div className="flex flex-col gap-2">
                                                 <span className={`badge ${getStatusBadge(campaign.status)}`}>
                                                     {campaign.status}
                                                 </span>

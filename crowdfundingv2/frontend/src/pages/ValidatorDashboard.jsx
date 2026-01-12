@@ -235,54 +235,95 @@ export default function ValidatorDashboard() {
                             </h2>
                             <p className="text-gray-500">{selectedCampaign.campaignId}</p>
                         </div>
-                        <div className="p-6 space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
+                        <div className="p-6 space-y-4 overflow-y-auto max-h-[60vh]">
+                            {/* Campaign Details View */}
+                            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 space-y-3 mb-6">
                                 <div>
-                                    <label className="label">Due Diligence Score</label>
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        min="0"
-                                        max="10"
-                                        value={formData.dueDiligenceScore}
-                                        onChange={(e) => setFormData({ ...formData, dueDiligenceScore: parseFloat(e.target.value) })}
-                                        className="input"
-                                    />
+                                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                                        {selectedCampaign.projectName || selectedCampaign.project_name}
+                                    </h3>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1 whitespace-pre-wrap">
+                                        {selectedCampaign.description}
+                                    </p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span className="text-gray-500 block">Goal Amount</span>
+                                        <span className="font-medium text-gray-900 dark:text-white">
+                                            ${(selectedCampaign.goalAmount || selectedCampaign.goal_amount || 0).toLocaleString()} {selectedCampaign.currency}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 block">Category</span>
+                                        <span className="font-medium text-gray-900 dark:text-white">
+                                            {selectedCampaign.category}
+                                        </span>
+                                    </div>
+                                </div>
+                                {selectedCampaign.documents && selectedCampaign.documents.length > 0 && (
+                                    <div>
+                                        <span className="text-gray-500 block text-sm mb-1">Documents</span>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedCampaign.documents.map((doc, idx) => (
+                                                <span key={idx} className="px-2 py-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded text-xs flex items-center gap-1">
+                                                    <FileText size={12} />
+                                                    {doc}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="label">Due Diligence Score</label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            max="10"
+                                            value={formData.dueDiligenceScore}
+                                            onChange={(e) => setFormData({ ...formData, dueDiligenceScore: parseFloat(e.target.value) })}
+                                            className="input"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="label">Risk Score</label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            max="10"
+                                            value={formData.riskScore}
+                                            onChange={(e) => setFormData({ ...formData, riskScore: parseFloat(e.target.value) })}
+                                            className="input"
+                                        />
+                                    </div>
                                 </div>
                                 <div>
-                                    <label className="label">Risk Score</label>
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        min="0"
-                                        max="10"
-                                        value={formData.riskScore}
-                                        onChange={(e) => setFormData({ ...formData, riskScore: parseFloat(e.target.value) })}
+                                    <label className="label">Risk Level</label>
+                                    <select
+                                        value={formData.riskLevel}
+                                        onChange={(e) => setFormData({ ...formData, riskLevel: e.target.value })}
                                         className="input"
+                                    >
+                                        <option value="LOW">LOW</option>
+                                        <option value="MEDIUM">MEDIUM</option>
+                                        <option value="HIGH">HIGH</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="label">Comments</label>
+                                    <textarea
+                                        value={formData.comments}
+                                        onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
+                                        className="input"
+                                        rows={3}
+                                        placeholder="Add validation comments..."
                                     />
                                 </div>
-                            </div>
-                            <div>
-                                <label className="label">Risk Level</label>
-                                <select
-                                    value={formData.riskLevel}
-                                    onChange={(e) => setFormData({ ...formData, riskLevel: e.target.value })}
-                                    className="input"
-                                >
-                                    <option value="LOW">LOW</option>
-                                    <option value="MEDIUM">MEDIUM</option>
-                                    <option value="HIGH">HIGH</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="label">Comments</label>
-                                <textarea
-                                    value={formData.comments}
-                                    onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
-                                    className="input"
-                                    rows={3}
-                                    placeholder="Add validation comments..."
-                                />
                             </div>
                         </div>
                         <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
