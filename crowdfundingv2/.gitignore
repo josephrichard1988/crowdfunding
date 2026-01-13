@@ -53,8 +53,9 @@ node_modules/
 .env
 .env.local
 .env.example
-.env.template
 .env.*.local
 
 # Docker related
 docker-compose.override.yml
+
+.github/*
