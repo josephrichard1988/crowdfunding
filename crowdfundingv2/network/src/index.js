@@ -322,21 +322,6 @@ app.delete('/api/startup/startups/:startupId', async (req, res) => {
             }
         }
 
-        // Sync STARTUP deletion status
-        if (authToken) {
-            try {
-                logger.info(`Syncing deletion status for startup ${startupId} to MongoDB`);
-                await axios.post(`${AUTH_API_BASE}/sync/startup-status`, {
-                    startupId,
-                    status: 'DELETED'
-                }, {
-                    headers: { Authorization: `Bearer ${authToken}` }
-                });
-            } catch (e) {
-                logger.warn(`Failed to sync deletion for startup ${startupId}: ${e.message}`);
-            }
-        }
-
         res.json({
             success: true,
             data: result,
