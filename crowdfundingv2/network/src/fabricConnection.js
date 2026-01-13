@@ -51,15 +51,12 @@ class FabricConnection {
             const isDevelopment = process.env.NODE_ENV !== 'production';
             const eventStrategies = require('fabric-network').DefaultEventHandlerStrategies;
 
-            // For production: use MSPID_SCOPE_ANYFORTX (wait for commit confirmation)
-            // For development (Microfab): use NONE (Microfab doesn't expose event listeners properly)
-            const eventStrategy = isDevelopment
-                ? eventStrategies.NONE
-                : eventStrategies.MSPID_SCOPE_ANYFORTX;
+            // CRITICAL: Use NETWORK_SCOPE_ANYFORTX to wait for commit confirmation
+            // This waits for ANY peer in the network to confirm commit, which works
+            // reliably in Microfab where discovery doesn't properly expose MSP-specific peers
+            const eventStrategy = eventStrategies.NETWORK_SCOPE_ANYFORTX;
 
-            if (isDevelopment) {
-                logger.info(`⚠️  Using NONE event strategy (dev mode) - commits still happen`);
-            }
+            logger.info(`✅ Using NETWORK_SCOPE_ANYFORTX event strategy - waiting for commit confirmation`);
 
             // Create and connect gateway
             const gateway = new Gateway();
@@ -68,7 +65,7 @@ class FabricConnection {
                 wallet,
                 identity: org.adminUser,
                 // Enable discovery with asLocalhost for .nip.io URL translation
-                // setEndorsingOrganizations in submitTransaction limits which orgs endorse
+                // The warning about 0 endorsers is normal in Microfab - fallback works fine
                 discovery: { enabled: true, asLocalhost: true },
                 eventHandlerOptions: {
                     commitTimeout: isDevelopment ? 30 : 300,
@@ -144,62 +141,41 @@ class FabricConnection {
                 //  to explicitly target the correct peer
                 // This is necessary because Microfab discovery ignores setEndorsingOrganizations
                 try {
-                    // Get network instance (must await if getting fresh)
-                    const gateway = this.gateways[orgKey];
-                    const network = await gateway.getNetwork(config.channelName);
-
-                    // Get channel and endorsers
+                    // Get network instance
+                    const network = await this.gateways[orgKey].getNetwork(config.channelName);
                     const channel = network.getChannel();
-                    const allEndorsers = channel.getEndorsers();
+                    
+                    // Try discovery first
+                    let orgEndorsers = channel.getEndorsers().filter(peer => peer.mspid === mspId);
 
-                    // Filter for endorsers belonging to the target MSP
-                    let orgEndorsers = allEndorsers.filter(peer => peer.mspid === mspId);
-
-                    // If no endorsers found via discovery, try to get from connection profile explicit peers
+                    // If discovery fails, build peers manually from connection profile
                     if (orgEndorsers.length === 0) {
-                        logger.warn(`⚠️ Discovery returned 0 endorsers for ${mspId}. Probing connection profile...`);
-                        try {
-                            const gateway = this.gateways[orgKey];
-                            // Access the internal connection options to get the profile
-                            // Note: This relies on internal SDK structure or we need to reload the profile
-                            // Safer way: Construct the expected Microfab peer name since we know the pattern
-                            // or read from the loaded profile if we saved it. 
+                        logger.warn(`⚠️ Discovery returned 0 endorsers for ${mspId}. Building from connection profile...`);
+                        
+                        const orgConfig = config.orgs[orgKey];
+                        const profilePath = require('path').resolve(config.gatewaysDir, orgConfig.gatewayFile);
+                        const profile = require(profilePath);
 
-                            // Microfab pattern is usually: {orgNameLower}peer-api.127-0-0-1.nip.io:9090
-                            // But better to check the profile we loaded
-                            const orgConfig = config.orgs[orgKey];
-                            const profilePath = require('path').resolve(config.gatewaysDir, orgConfig.gatewayFile);
-                            const profile = require(profilePath);
-
-                            if (profile.organizations && profile.organizations[orgConfig.name] && profile.organizations[orgConfig.name].peers) {
-                                const peerNames = profile.organizations[orgConfig.name].peers;
-                                logger.info(`🔍 Found explicit peers in profile: ${peerNames.join(', ')}`);
-
-                                for (const peerName of peerNames) {
-                                    try {
-                                        const peer = channel.getEndorser(peerName);
-                                        // let peer = channel.getEndorser(peerName);
-                                        // // If channel doesn't know it (discovery failed), try getting it from the client directly
-                                        // if (!peer && channel.client) {
-                                        //     peer = channel.client.getEndorser(peerName, mspId);
-                                        // }
-                                        if (peer) {
-                                            orgEndorsers.push(peer);
-                                            logger.info(`✅ Successfully added peer by name: ${peerName}`);
-                                        }
-                                    } catch (e) {
-                                        logger.warn(`Failed to get endorser ${peerName}: ${e.message}`);
-                                    }
-                                }
+                        // Get peer URLs from profile
+                        const peerUrls = profile.organizations?.[orgConfig.name]?.peers || [];
+                        
+                        for (const peerName of peerUrls) {
+                            const peerConfig = profile.peers?.[peerName];
+                            if (peerConfig && peerConfig.url) {
+                                // Build endorser from connection profile data
+                                const endorser = channel.client.newEndorser(peerName);
+                                endorser.endpoint = channel.client.newEndpoint(peerConfig);
+                                endorser.mspid = mspId;
+                                
+                                await endorser.connect();
+                                orgEndorsers.push(endorser);
+                                logger.info(`✅ Connected to peer: ${peerName} (${peerConfig.url})`);
                             }
-                        } catch (err) {
-                            logger.warn(`❌ Failed to parse connection profile for backup peers: ${err.message}`);
                         }
                     }
 
                     if (orgEndorsers.length > 0) {
-                        logger.info(`🎯 Found ${orgEndorsers.length} peer(s) for ${mspId}: ${orgEndorsers.map(p => p.name).join(', ')}`);
-                        // Set explicit endorsing peers
+                        logger.info(`🎯 Using ${orgEndorsers.length} peer(s) for endorsement and events`);
                         const transaction = contract.createTransaction(fcn);
                         transaction.setEndorsingPeers(orgEndorsers);
 
@@ -209,11 +185,11 @@ class FabricConnection {
 
                         if (!resultStr || resultStr === '') return { success: true };
                         try { return JSON.parse(resultStr); } catch { return { success: true, message: resultStr }; }
-                    } else {
-                        logger.warn(`⚠️ No peers found for ${mspId}, falling back to setEndorsingOrganizations`);
                     }
+                    
+                    logger.warn(`⚠️ Could not find any peers, using default transaction`);
                 } catch (pe) {
-                    logger.warn(`⚠️ Peer lookup failed: ${pe.message}, falling back`);
+                    logger.warn(`⚠️ Peer setup failed: ${pe.message}, using default transaction`);
                 }
 
                 // Fallback (or if peer lookup failed)

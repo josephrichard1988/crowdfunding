@@ -231,13 +231,8 @@ func (s *StartupContract) CreateStartup(
 		return fmt.Errorf("failed to store startup: %v", err)
 	}
 
-	// Also store owner mapping for querying startups by owner
-	// Key: OWNER_{ownerID}_{startupID}
-	ownerKey := fmt.Sprintf("OWNER_%s_%s", ownerID, startupID)
-	err = ctx.GetStub().PutPrivateData(StartupPrivateCollection, ownerKey, startupJSON)
-	if err != nil {
-		return fmt.Errorf("failed to store owner mapping: %v", err)
-	}
+	// NOTE: No need to store owner mapping anymore since we use rich queries
+	// Rich queries can search by ownerId field directly without duplicate keys
 
 	return nil
 }
@@ -269,11 +264,18 @@ func (s *StartupContract) GetStartupsByOwner(
 	ctx contractapi.TransactionContextInterface,
 	ownerID string,
 ) ([]Startup, error) {
-	// Query using range with owner prefix
-	startKey := fmt.Sprintf("OWNER_%s_", ownerID)
-	endKey := fmt.Sprintf("OWNER_%s_~", ownerID)
+	// // Query using range with owner prefix
+	// startKey := fmt.Sprintf("OWNER_%s_", ownerID)
+	// endKey := fmt.Sprintf("OWNER_%s_~", ownerID)
 
-	resultsIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupPrivateCollection, startKey, endKey)
+	// resultsIterator, err := ctx.GetStub().GetPrivateDataByRange(StartupPrivateCollection, startKey, endKey)
+
+
+	// Use rich query instead of range query for better reliability
+	// IMPORTANT: JSON field name is "ownerId" (lowercase) as defined in struct json tag
+	queryString := fmt.Sprintf(`{"selector":{"ownerId":"%s"}}`, ownerID)
+	
+	resultsIterator, err := ctx.GetStub().GetPrivateDataQueryResult(StartupPrivateCollection, queryString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query startups by owner: %v", err)
 	}
@@ -327,12 +329,7 @@ func (s *StartupContract) AddCampaignToStartup(
 		return fmt.Errorf("failed to update startup: %v", err)
 	}
 
-	// Update owner mapping too
-	ownerKey := fmt.Sprintf("OWNER_%s_%s", startup.OwnerID, startupID)
-	err = ctx.GetStub().PutPrivateData(StartupPrivateCollection, ownerKey, startupJSON)
-	if err != nil {
-		return fmt.Errorf("failed to update owner mapping: %v", err)
-	}
+	// No need to update owner mapping - using rich queries now
 
 	return nil
 }
@@ -448,8 +445,7 @@ func (s *StartupContract) DeleteCampaign(
 		startup.UpdatedAt = timestamp.Format(time.RFC3339)
 		startupJSON, _ := json.Marshal(startup)
 		ctx.GetStub().PutPrivateData(StartupPrivateCollection, "STARTUP_"+startup.StartupID, startupJSON)
-		ownerKey := fmt.Sprintf("OWNER_%s_%s", startup.OwnerID, startup.StartupID)
-		ctx.GetStub().PutPrivateData(StartupPrivateCollection, ownerKey, startupJSON)
+		// No need to update owner mapping - using rich queries now
 	}
 
 	return &deletionRecord, nil
@@ -573,9 +569,7 @@ func (s *StartupContract) DeleteStartup(
 	// Delete startup from private data
 	ctx.GetStub().DelPrivateData(StartupPrivateCollection, "STARTUP_"+startupID)
 
-	// Delete owner mapping
-	ownerKey := fmt.Sprintf("OWNER_%s_%s", startup.OwnerID, startupID)
-	ctx.GetStub().DelPrivateData(StartupPrivateCollection, ownerKey)
+	// No need to delete owner mapping - not creating it anymore
 
 	return &StartupDeletionResult{
 		StartupDeletion:   startupDeletionRecord,

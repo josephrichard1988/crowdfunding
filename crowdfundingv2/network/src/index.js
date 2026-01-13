@@ -192,12 +192,17 @@ app.get('/api/startup/startups/:startupId', async (req, res) => {
 app.get('/api/startup/startups/owner/:ownerId', async (req, res) => {
     try {
         const { ownerId } = req.params;
+        logger.info(`🔍 Querying startups for owner: ${ownerId}`);
+        
         const result = await fabricConnection.evaluateTransaction(
             'startup', 'StartupContract', 'GetStartupsByOwner', ownerId
         );
+        
+        logger.info(`📥 Query result: ${JSON.stringify(result).substring(0, 200)}...`);
         res.json({ success: true, data: result || [] });
     } catch (error) {
-        logger.warn('Get startups by owner error:', error.message);
+        logger.error(`❌ Get startups by owner error for ${req.params.ownerId}: ${error.message}`);
+        logger.error(`❌ Stack: ${error.stack}`);
         // Return empty array on error (common when no startups exist)
         res.json({ success: true, data: [] });
     }
@@ -319,21 +324,6 @@ app.delete('/api/startup/startups/:startupId', async (req, res) => {
                 } catch (e) {
                     logger.warn(`Failed to sync deletion for campaign ${delRecord.entityId}: ${e.message}`);
                 }
-            }
-        }
-
-        // Sync STARTUP deletion status
-        if (authToken) {
-            try {
-                logger.info(`Syncing deletion status for startup ${startupId} to MongoDB`);
-                await axios.post(`${AUTH_API_BASE}/sync/startup-status`, {
-                    startupId,
-                    status: 'DELETED'
-                }, {
-                    headers: { Authorization: `Bearer ${authToken}` }
-                });
-            } catch (e) {
-                logger.warn(`Failed to sync deletion for startup ${startupId}: ${e.message}`);
             }
         }
 
