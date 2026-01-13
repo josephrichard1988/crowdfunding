@@ -1,0 +1,24 @@
+{
+    "name": "crowdfunding-network",
+    "version": "1.0.0",
+    "description": "Fabric Network Service for Crowdfunding",
+    "main": "src/index.js",
+    "scripts": {
+        "start": "node src/index.js",
+        "dev": "nodemon src/index.js",
+        "enroll": "node src/enrollAdmin.js"
+    },
+    "dependencies": {
+        "axios": "^1.13.2",
+        "cors": "^2.8.5",
+        "dotenv": "^16.3.1",
+        "express": "^4.18.2",
+        "fabric-ca-client": "^2.2.20",
+        "fabric-network": "^2.2.20",
+        "morgan": "^1.10.0",
+        "winston": "^3.11.0"
+    },
+    "devDependencies": {
+        "nodemon": "^3.0.2"
+    }
+}

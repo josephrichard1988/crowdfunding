@@ -1,0 +1,47 @@
+{
+  "port": 9090,
+  "endorsing_organizations": [
+    {
+      "name": "StartupOrg",
+      "peers": [
+        {
+          "name": "peer0",
+          "stateDatabase": "couchdb"
+        }
+      ]
+    },
+    {
+      "name": "ValidatorOrg",
+      "peers": [
+        {
+          "name": "peer0",
+          "stateDatabase": "couchdb"
+        }
+      ]
+    },
+    {
+      "name": "InvestorOrg",
+      "peers": [
+        {
+          "name": "peer0",
+          "stateDatabase": "couchdb"
+        }
+      ]
+    },
+    {
+      "name": "PlatformOrg",
+      "peers": [
+        {
+          "name": "peer0",
+          "stateDatabase": "couchdb"
+        }
+      ]
+    }
+  ],
+  "channels": [
+    {
+      "name": "crowdfunding-channel",
+      "endorsing_organizations": ["StartupOrg", "ValidatorOrg", "InvestorOrg", "PlatformOrg"]
+    }
+  ]
+}
