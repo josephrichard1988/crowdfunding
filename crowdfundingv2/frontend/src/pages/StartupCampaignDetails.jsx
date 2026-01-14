@@ -205,6 +205,17 @@ export default function StartupCampaignDetails() {
                         </button>
                     )}
 
+                    {canShareToPlatform && (
+                        <button
+                            onClick={handleShareToPlatform}
+                            className="btn bg-green-600 text-white hover:bg-green-700 focus:ring-green-500 flex items-center gap-2 shadow-md hover:shadow-lg"
+                            disabled={submitting}
+                        >
+                            <Share2 size={18} />
+                            Send to Platform for Publishing
+                        </button>
+                    )}
+
                     {campaign.validationStatus === 'PENDING_VALIDATION' && (
                         <span className="px-4 py-2 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded-lg text-sm flex items-center gap-2">
                             <Loader2 className="animate-spin" size={16} />

@@ -634,6 +634,19 @@ app.get('/api/validator/pending-validations', async (req, res) => {
     }
 });
 
+// Get all validation history for the organization
+app.get('/api/validator/validation-history', async (req, res) => {
+    try {
+        const result = await fabricConnection.evaluateTransaction(
+            'validator', 'ValidatorContract', 'GetAllValidations'
+        );
+        res.json({ success: true, data: result || [] });
+    } catch (error) {
+        logger.warn(`GetAllValidations: ${error.message}`);
+        res.json({ success: true, data: [] });
+    }
+});
+
 app.get('/api/validator/campaigns/:campaignId', async (req, res) => {
     try {
         const result = await fabricConnection.evaluateTransaction(
@@ -663,15 +676,18 @@ app.post('/api/validator/validate/:campaignId', async (req, res) => {
 
 app.post('/api/validator/approve/:campaignId', async (req, res) => {
     try {
-        const { validationId, status, dueDiligenceScore, riskScore, riskLevel, comments, issues, requiredDocuments, submissionHash } = req.body;
+        const { validationId, status, dueDiligenceScore, riskScore, riskLevel, comments, issues, requiredDocuments, submissionHash, authToken, startupId, validatorOrgUserId } = req.body;
         const campaignId = req.params.campaignId;
         const valId = validationId || `VAL_${Date.now()}`;
 
+        // Use actual validator's orgUserId instead of hardcoded value
+        const actualValidatorId = validatorOrgUserId || 'VALIDATOR001'; // Fallback for backward compatibility
+
         // Step 1: First create the validation record with ValidateCampaign
-        logger.info(`Step 1: Creating validation record for ${campaignId}`);
+        logger.info(`Step 1: Creating validation record for ${campaignId} by validator ${actualValidatorId}`);
         await fabricConnection.submitTransaction(
             'validator', 'ValidatorContract', 'ValidateCampaign',
-            valId, campaignId, 'VALIDATOR001',
+            valId, campaignId, actualValidatorId,
             submissionHash || '', JSON.stringify(requiredDocuments || [])
         );
 
@@ -686,7 +702,6 @@ app.post('/api/validator/approve/:campaignId', async (req, res) => {
         );
 
         // Step 3: Sync status to MongoDB (startupId and authToken passed from frontend)
-        const { authToken, startupId } = req.body;
         if (authToken && startupId) {
             try {
                 await axios.post(`${AUTH_API_BASE}/sync/campaign-status`, {

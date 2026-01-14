@@ -228,14 +228,82 @@ class FabricConnection {
 
     /**
      * Evaluate transaction (query)
+     * For PDC queries, we must ensure the query is executed on the correct org's peer
      */
     async evaluateTransaction(orgKey, contractName, functionName, ...args) {
         const contract = await this.getContract(orgKey);
         const fcn = `${contractName}:${functionName}`;
 
-        logger.info(`🔍 Query: ${fcn} | Args: ${JSON.stringify(args).substring(0, 100)}...`);
+        logger.info(`🔍 Query: ${fcn} | Org: ${orgKey} | Args: ${JSON.stringify(args).substring(0, 100)}...`);
 
         try {
+            // Explicit MSP ID mapping for each org
+            const orgMspMap = {
+                'startup': 'StartupOrgMSP',
+                'investor': 'InvestorOrgMSP',
+                'validator': 'ValidatorOrgMSP',
+                'platform': 'PlatformOrgMSP'
+            };
+            const mspId = orgMspMap[orgKey] || config.orgs[orgKey]?.mspId;
+
+            // For PDC queries, target specific peer from the org to ensure access to private data
+            try {
+                const network = await this.gateways[orgKey].getNetwork(config.channelName);
+                const channel = network.getChannel();
+                
+                // Get endorsers for this org
+                let orgEndorsers = channel.getEndorsers().filter(peer => peer.mspid === mspId);
+
+                // If discovery fails, build peers manually from connection profile
+                if (orgEndorsers.length === 0) {
+                    logger.warn(`⚠️ Discovery returned 0 query peers for ${mspId}. Building from connection profile...`);
+                    
+                    const orgConfig = config.orgs[orgKey];
+                    const profilePath = require('path').resolve(config.gatewaysDir, orgConfig.gatewayFile);
+                    const profile = require(profilePath);
+
+                    // Get peer URLs from profile
+                    const peerUrls = profile.organizations?.[orgConfig.name]?.peers || [];
+                    
+                    for (const peerName of peerUrls) {
+                        const peerConfig = profile.peers?.[peerName];
+                        if (peerConfig && peerConfig.url) {
+                            // Build endorser from connection profile data
+                            const endorser = channel.client.newEndorser(peerName);
+                            endorser.endpoint = channel.client.newEndpoint(peerConfig);
+                            endorser.mspid = mspId;
+                            
+                            await endorser.connect();
+                            orgEndorsers.push(endorser);
+                            logger.info(`✅ Connected to query peer: ${peerName} (${peerConfig.url})`);
+                        }
+                    }
+                }
+
+                if (orgEndorsers.length > 0) {
+                    logger.info(`🎯 Using ${orgEndorsers.length} peer(s) for query (MSP: ${mspId})`);
+                    const transaction = contract.createTransaction(fcn);
+                    transaction.setEndorsingPeers(orgEndorsers);
+
+                    const result = await transaction.evaluate(...args);
+                    const resultStr = result.toString();
+                    logger.info(`📥 Result: ${resultStr.substring(0, 100)}...`);
+
+                    if (!resultStr || resultStr === '') {
+                        return [];
+                    }
+
+                    try {
+                        return JSON.parse(resultStr);
+                    } catch {
+                        return resultStr;
+                    }
+                }
+            } catch (pe) {
+                logger.warn(`⚠️ Peer targeting failed: ${pe.message}, using default query`);
+            }
+
+            // Fallback to default query
             const result = await contract.evaluateTransaction(fcn, ...args);
             const resultStr = result.toString();
 

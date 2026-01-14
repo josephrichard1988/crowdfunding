@@ -6,6 +6,7 @@ const router = express.Router();
 // Campaign Validation
 router.get('/campaigns/:campaignId', validatorController.getCampaign);
 router.get('/pending-validations', validatorController.getPendingValidations);
+router.get('/validation-history', validatorController.getAllValidationHistory);
 router.post('/validate/:campaignId', validatorController.validateCampaign);
 router.post('/approve/:campaignId', validatorController.approveCampaign);
 

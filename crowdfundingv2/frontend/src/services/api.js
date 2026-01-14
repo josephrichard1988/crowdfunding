@@ -83,6 +83,7 @@ export const startupApi = {
 export const validatorApi = {
     getCampaign: (campaignId) => api.get(`/validator/campaigns/${campaignId}`),
     getPendingValidations: (validatorId) => api.get(`/validator/pending-validations${validatorId ? `?validatorId=${validatorId}` : ''}`),
+    getAllValidationHistory: () => api.get('/validator/validation-history'),
     validateCampaign: (campaignId, data) => api.post(`/validator/validate/${campaignId}`, data),
     approveCampaign: (campaignId, data) => api.post(`/validator/approve/${campaignId}`, data),
     getValidationRequests: () => api.get('/validator/validation-requests'),
@@ -110,6 +111,11 @@ export const investorApi = {
     makeInvestment: (data) => api.post('/investor/investments', data),
     getMyInvestments: (investorId) => api.get(`/investor/my-investments${investorId ? `?investorId=${investorId}` : ''}`),
     createProposal: (data) => api.post('/investor/proposals', data),
+};
+
+// User API (for fetching user details)
+export const userApi = {
+    getUserByOrgId: (orgUserId) => authApi.get(`/user/${orgUserId}`),
 };
 
 export { authApi };

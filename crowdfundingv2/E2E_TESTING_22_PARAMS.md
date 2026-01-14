@@ -36,7 +36,7 @@ peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfund
 ### 0.2 QUERY: Get Startup by ID
 
 ```bash
-peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:GetStartup","Args":["STU_STA_FBD16AB5B3AB7F14_F3DFAA"]}'
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"StartupContract:GetStartup","Args":["STARTUP001"]}'
 ```
 
 **Expected Response:**
@@ -253,7 +253,7 @@ source ./deploy_chaincode.sh switch validator
 
 # View pending campaign (from StartupValidatorShared)
 # Check "submissionHash" in the response
-peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"ValidatorContract:GetCampaign","Args":["CAMP_STU_STA_FA68F8B634ACE62B_DDA8EF_598B41"]}'
+peer chaincode query -o orderer-api.127-0-0-1.nip.io:9090 --channelID crowdfunding-channel -n crowdfunding -c '{"function":"ValidatorContract:GetCampaign","Args":["CAMP001"]}'
 
 # Validate campaign (Start validation)
 # Args: [ValidationID, CampaignID, ValidatorID, SubmissionHash, DocumentsReviewedJSON]
