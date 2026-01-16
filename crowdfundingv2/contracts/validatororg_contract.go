@@ -353,6 +353,7 @@ func (v *ValidatorContract) ApproveOrRejectCampaign(
 		"riskLevel":           riskLevel,
 		"dueDiligenceScore":   dueDiligenceScore,
 		"riskScore":           riskScore,
+		"validatorComments":   comments,
 		"validationProofHash": validationProofHash, /* Was validationHash */
 		"requiredDocuments":   requiredDocuments,
 		"updatedAt":           timestamp,
@@ -1032,6 +1033,9 @@ func (v *ValidatorContract) GetCampaign(ctx contractapi.TransactionContextInterf
 	}
 	if val, ok := statusMap["requiredDocuments"]; ok {
 		campaignMap["requiredDocuments"] = val
+	}
+	if val, ok := statusMap["validatorComments"]; ok {
+		campaignMap["validatorComments"] = val
 	}
 
 	mergedJSON, err := json.Marshal(campaignMap)

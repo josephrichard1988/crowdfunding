@@ -288,7 +288,7 @@ export default function StartupCampaignDetails() {
                             </span>
                         </div>
                         <div className="flex justify-between">
-                            <span className="text-gray-500">Duration</span>
+                            <span className="text-gray-500">Funding Period</span>
                             <span className="font-medium text-gray-900 dark:text-white">{campaign.duration} days</span>
                         </div>
                         <div className="flex justify-between">
@@ -338,6 +338,16 @@ export default function StartupCampaignDetails() {
                                 <span className={`font-medium ${campaign.riskLevel === 'LOW' ? 'text-green-600' :
                                     campaign.riskLevel === 'MEDIUM' ? 'text-yellow-600' : 'text-red-600'
                                     }`}>{campaign.riskLevel}</span>
+                            </div>
+                        )}
+                        {campaign.validatorComments && campaign.validatorComments.length > 0 && (
+                            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                                <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">Validator Comments:</p>
+                                <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
+                                    {campaign.validatorComments.map((comment, idx) => (
+                                        <li key={idx}>• {comment}</li>
+                                    ))}
+                                </ul>
                             </div>
                         )}
                         {campaign.validationProofHash && (

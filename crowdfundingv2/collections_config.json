@@ -50,7 +50,7 @@
   {
     "name": "StartupValidatorShared",
     "policy": "OR('StartupOrgMSP.member', 'ValidatorOrgMSP.member')",
-    "requiredPeerCount": 1,
+    "requiredPeerCount": 0,
     "maxPeerCount": 2,
     "blockToLive": 0,
     "memberOnlyRead": true,
@@ -62,7 +62,7 @@
   {
     "name": "StartupInvestorShared",
     "policy": "OR('StartupOrgMSP.member', 'InvestorOrgMSP.member')",
-    "requiredPeerCount": 1,
+    "requiredPeerCount": 0,
     "maxPeerCount": 2,
     "blockToLive": 0,
     "memberOnlyRead": true,
@@ -86,7 +86,7 @@
   {
     "name": "StartupPlatformShared",
     "policy": "OR('StartupOrgMSP.member', 'PlatformOrgMSP.member')",
-    "requiredPeerCount": 1,
+    "requiredPeerCount": 0,
     "maxPeerCount": 2,
     "blockToLive": 0,
     "memberOnlyRead": true,

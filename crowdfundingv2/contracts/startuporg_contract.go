@@ -971,6 +971,7 @@ func (s *StartupContract) SubmitForValidation(
 		"goalAmount":       campaign.GoalAmount,
 		"description":      campaign.Description,
 		"documents":        documents,
+		"submissionNotes":  submissionNotes,
 		"submissionHash":   campaignHash, /* Was validationHash */
 		"validationStatus": campaign.ValidationStatus,
 		"submittedAt":      timestamp,
@@ -1666,14 +1667,30 @@ func (s *StartupContract) GetCampaign(ctx contractapi.TransactionContextInterfac
 			campaign.ValidationProofHash = val
 		}
 		if val, ok := statusUpdate["riskLevel"].(string); ok {
-			campaign.RiskLevel = val // Assuming RiskLevel exists in Campaign struct, otherwise ignore or map
+			campaign.RiskLevel = val
 		}
 		if val, ok := statusUpdate["riskScore"].(float64); ok {
-			campaign.ValidationScore = val // Mapping risk/dd score to ValidationScore
+			campaign.ValidationScore = val
 		}
 		if val, ok := statusUpdate["dueDiligenceScore"].(float64); ok {
 			if campaign.ValidationScore == 0 {
 				campaign.ValidationScore = val
+			}
+		}
+		// Extract validator comments if present (optional field)
+		if val, ok := statusUpdate["validatorComments"]; ok && val != nil {
+			// Handle both []interface{} and []string
+			switch v := val.(type) {
+			case []interface{}:
+				comments := make([]string, 0, len(v))
+				for _, c := range v {
+					if str, ok := c.(string); ok {
+						comments = append(comments, str)
+					}
+				}
+				campaign.ValidatorComments = comments
+			case []string:
+				campaign.ValidatorComments = v
 			}
 		}
 
@@ -1752,6 +1769,17 @@ func (s *StartupContract) GetCampaign(ctx contractapi.TransactionContextInterfac
 		}
 	*/
 
+	// Ensure arrays are never null before returning
+	if campaign.Tags == nil {
+		campaign.Tags = []string{}
+	}
+	if campaign.Documents == nil {
+		campaign.Documents = []string{}
+	}
+	if campaign.ValidatorComments == nil {
+		campaign.ValidatorComments = []string{}
+	}
+
 	return &campaign, nil
 }
 
@@ -1802,6 +1830,9 @@ func (s *StartupContract) GetAllCampaigns(ctx contractapi.TransactionContextInte
 		}
 		if campaign.Documents == nil {
 			campaign.Documents = []string{}
+		}
+		if campaign.ValidatorComments == nil {
+			campaign.ValidatorComments = []string{}
 		}
 
 		campaigns = append(campaigns, campaign)
@@ -1872,6 +1903,9 @@ func (s *StartupContract) GetCampaignsByStartupId(ctx contractapi.TransactionCon
 		}
 		if campaign.Documents == nil {
 			campaign.Documents = []string{}
+		}
+		if campaign.ValidatorComments == nil {
+			campaign.ValidatorComments = []string{}
 		}
 
 		campaigns = append(campaigns, campaign)

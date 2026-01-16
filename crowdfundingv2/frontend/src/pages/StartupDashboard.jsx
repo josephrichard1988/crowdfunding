@@ -57,7 +57,7 @@ export default function StartupDashboard() {
         teamAvailable: false,
         investorCommitted: false,
         duration: 90,
-        fundingDay: 1,
+        fundingDay: new Date().getDate(),
         fundingMonth: new Date().getMonth() + 1,
         fundingYear: new Date().getFullYear(),
         investmentRange: '10K-100K',
@@ -179,6 +179,7 @@ export default function StartupDashboard() {
             const token = sessionStorage.getItem('token') || localStorage.getItem('token');
 
             // Create campaign with all 22 parameters + auth token for MongoDB sync
+            const today = new Date();
             const result = await startupApi.createCampaign({
                 startupId: selectedStartup.startupId,  // System-managed startup ID
                 category: formData.category,
@@ -193,9 +194,9 @@ export default function StartupDashboard() {
                 teamAvailable: formData.teamAvailable,
                 investorCommitted: formData.investorCommitted,
                 duration: parseInt(formData.duration) || 90,
-                fundingDay: parseInt(formData.fundingDay) || 1,
-                fundingMonth: parseInt(formData.fundingMonth) || 1,
-                fundingYear: parseInt(formData.fundingYear) || new Date().getFullYear(),
+                fundingDay: parseInt(formData.fundingDay) || today.getDate(),
+                fundingMonth: parseInt(formData.fundingMonth) || (today.getMonth() + 1),
+                fundingYear: parseInt(formData.fundingYear) || today.getFullYear(),
                 goalAmount: parseFloat(formData.goalAmount) || 50000,
                 investmentRange: formData.investmentRange,
                 projectName: formData.projectName,
@@ -221,7 +222,7 @@ export default function StartupDashboard() {
                 teamAvailable: false,
                 investorCommitted: false,
                 duration: 90,
-                fundingDay: 1,
+                fundingDay: new Date().getDate(),
                 fundingMonth: new Date().getMonth() + 1,
                 fundingYear: new Date().getFullYear(),
                 investmentRange: '10K-100K',

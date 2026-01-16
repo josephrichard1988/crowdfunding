@@ -111,18 +111,19 @@ type Campaign struct {
 	Documents         []string `json:"documents"`
 
 	// Calculated/Status Fields
-	OpenDate            string  `json:"open_date"`
-	CloseDate           string  `json:"close_date"`
-	FundsRaisedAmount   float64 `json:"funds_raised_amount"`
-	FundsRaisedPercent  float64 `json:"funds_raised_percent"`
-	Status              string  `json:"status"`
-	ValidationStatus    string  `json:"validationStatus"`
-	ValidationScore     float64 `json:"validationScore"`
-	RiskLevel           string  `json:"riskLevel"`
-	SubmissionHash      string  `json:"submissionHash"`
-	ValidationProofHash string  `json:"validationProofHash"` /* Was ValidationHash */
-	InvestorCount       int     `json:"investorCount"`
-	PlatformStatus      string  `json:"platformStatus"`
+	OpenDate            string   `json:"open_date"`
+	CloseDate           string   `json:"close_date"`
+	FundsRaisedAmount   float64  `json:"funds_raised_amount"`
+	FundsRaisedPercent  float64  `json:"funds_raised_percent"`
+	Status              string   `json:"status"`
+	ValidationStatus    string   `json:"validationStatus"`
+	ValidationScore     float64  `json:"validationScore"`
+	RiskLevel           string   `json:"riskLevel"`
+	SubmissionHash      string   `json:"submissionHash"`
+	ValidationProofHash string   `json:"validationProofHash"` /* Was ValidationHash */
+	ValidatorComments   []string `json:"validatorComments"`
+	InvestorCount       int      `json:"investorCount"`
+	PlatformStatus      string   `json:"platformStatus"`
 
 	// Timestamps
 	CreatedAt   string `json:"createdAt"`

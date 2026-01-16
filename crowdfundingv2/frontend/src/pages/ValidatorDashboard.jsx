@@ -313,6 +313,12 @@ export default function ValidatorDashboard() {
                                         </div>
                                     </div>
                                 )}
+                                {selectedCampaign.submissionNotes && (
+                                    <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                                        <p className="text-xs font-medium text-yellow-700 dark:text-yellow-300 mb-1">Startup's Submission Notes:</p>
+                                        <p className="text-sm text-gray-700 dark:text-gray-300">{selectedCampaign.submissionNotes}</p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
