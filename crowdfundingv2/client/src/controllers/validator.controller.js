@@ -116,6 +116,23 @@ export async function provideValidationDetails(req, res, next) {
 }
 
 /**
+ * Get all validation history for the organization
+ * Shows all validations performed by any validator in the org
+ */
+export async function getAllValidationHistory(req, res, next) {
+    try {
+        const result = await fabricGateway.evaluateTransaction(
+            ORG, CONTRACT, 'GetAllValidations'
+        );
+        res.json({ success: true, data: result });
+    } catch (error) {
+        console.error('Failed to get validation history:', error.message);
+        // Return empty array if function doesn't exist yet
+        res.json({ success: true, data: [] });
+    }
+}
+
+/**
  * Verify milestone completion
  */
 export async function verifyMilestone(req, res, next) {

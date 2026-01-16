@@ -130,6 +130,33 @@ router.get('/me', authMiddleware, async (req, res) => {
     }
 });
 
+// Get user details by orgUserId (for displaying names in history/lists)
+router.get('/user/:orgUserId', authMiddleware, async (req, res) => {
+    try {
+        const { orgUserId } = req.params;
+        const user = await User.findOne({ orgUserId });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Return only safe public info (not password hash)
+        res.json({ 
+            success: true,
+            data: {
+                orgUserId: user.orgUserId,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }
+        });
+
+    } catch (error) {
+        console.error('Get user by orgUserId error:', error);
+        res.status(500).json({ error: 'Failed to get user' });
+    }
+});
+
 // ============================================================================
 // UPDATE WALLET (sync from chaincode)
 // ============================================================================

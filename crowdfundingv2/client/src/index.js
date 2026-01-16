@@ -45,6 +45,7 @@ app.listen(PORT, () => {
     console.log(`🔐 Authentication Server running on port ${PORT}`);
     console.log(`📊 MongoDB: Connecting.....`);
     console.log(`⚠️  This server handles AUTH ONLY - Fabric API is on port 4000`);
+    console.log(`📊 MongoDB: Connecting.....`);
 });
 
 export default app;

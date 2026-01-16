@@ -57,3 +57,5 @@ node_modules/
 
 # Docker related
 docker-compose.override.yml
+
+.github/*

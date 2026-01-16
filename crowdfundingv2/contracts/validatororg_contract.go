@@ -353,6 +353,7 @@ func (v *ValidatorContract) ApproveOrRejectCampaign(
 		"riskLevel":           riskLevel,
 		"dueDiligenceScore":   dueDiligenceScore,
 		"riskScore":           riskScore,
+		"validatorComments":   comments,
 		"validationProofHash": validationProofHash, /* Was validationHash */
 		"requiredDocuments":   requiredDocuments,
 		"updatedAt":           timestamp,
@@ -1033,6 +1034,9 @@ func (v *ValidatorContract) GetCampaign(ctx contractapi.TransactionContextInterf
 	if val, ok := statusMap["requiredDocuments"]; ok {
 		campaignMap["requiredDocuments"] = val
 	}
+	if val, ok := statusMap["validatorComments"]; ok {
+		campaignMap["validatorComments"] = val
+	}
 
 	mergedJSON, err := json.Marshal(campaignMap)
 	if err != nil {
@@ -1106,6 +1110,50 @@ func (v *ValidatorContract) GetValidation(ctx contractapi.TransactionContextInte
 	}
 
 	return &validation, nil
+}
+
+// GetAllValidations retrieves all validation records for the organization
+// This allows any validator in the org to see validation history
+func (v *ValidatorContract) GetAllValidations(ctx contractapi.TransactionContextInterface) ([]ValidationRecord, error) {
+	// Use GetPrivateDataByRange to iterate through all validation records
+	resultsIterator, err := ctx.GetStub().GetPrivateDataByRange(ValidatorPrivateCollection, "VALIDATION_", "VALIDATION_~")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get validations: %v", err)
+	}
+	defer resultsIterator.Close()
+
+	var validations []ValidationRecord
+	count := 0
+	for resultsIterator.HasNext() {
+		queryResponse, err := resultsIterator.Next()
+		if err != nil {
+			fmt.Printf("Error iterating: %v\n", err)
+			continue
+		}
+
+		count++
+		fmt.Printf("Found key: %s\n", queryResponse.Key)
+
+		var validation ValidationRecord
+		err = json.Unmarshal(queryResponse.Value, &validation)
+		if err != nil {
+			fmt.Printf("Error unmarshaling validation %s: %v\n", queryResponse.Key, err)
+			continue
+		}
+
+		// Only include validations that have been finalized (APPROVED or REJECTED)
+		if validation.Status == "APPROVED" || validation.Status == "REJECTED" {
+			validations = append(validations, validation)
+		}
+	}
+
+	fmt.Printf("Total validation records found: %d, Finalized: %d\n", count, len(validations))
+
+	if validations == nil {
+		validations = []ValidationRecord{}
+	}
+
+	return validations, nil
 }
 
 // GetRiskInsight retrieves risk insight for a campaign

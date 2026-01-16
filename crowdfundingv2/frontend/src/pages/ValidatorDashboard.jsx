@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { validatorApi, queueApi } from '../services/api';
+import { validatorApi, queueApi, userApi } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { Shield, CheckCircle, XCircle, Clock, Loader2, RefreshCw, FileText, AlertTriangle, LogIn, Coins, ListChecks, History } from 'lucide-react';
@@ -15,6 +15,8 @@ export default function ValidatorDashboard() {
     const [pendingValidations, setPendingValidations] = useState([]);
     const [assignedQueue, setAssignedQueue] = useState([]);
     const [completedTasks, setCompletedTasks] = useState([]);
+    const [validationHistory, setValidationHistory] = useState([]);
+    const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'history'
     const [loading, setLoading] = useState(true);
     const [selectedCampaign, setSelectedCampaign] = useState(null);
     const [approving, setApproving] = useState(false);
@@ -62,6 +64,42 @@ export default function ValidatorDashboard() {
 
             const validations = await Promise.all(validationPromises);
             setPendingValidations(validations);
+
+            // Fetch org-level validation history if on history tab
+            if (activeTab === 'history') {
+                try {
+                    const historyRes = await validatorApi.getAllValidationHistory();
+                    console.log('Validation history response:', historyRes);
+                    const historyData = Array.isArray(historyRes.data?.data) ? historyRes.data.data : [];
+                    console.log('Parsed history data:', historyData);
+                    
+                    // Fetch validator names for each validation
+                    const historyWithNames = await Promise.all(
+                        historyData.map(async (validation) => {
+                            if (validation.validatorId) {
+                                try {
+                                    const userRes = await userApi.getUserByOrgId(validation.validatorId);
+                                    return {
+                                        ...validation,
+                                        validatorName: userRes.data?.data?.name || 'Unknown User'
+                                    };
+                                } catch (err) {
+                                    console.warn(`Failed to fetch name for ${validation.validatorId}:`, err);
+                                    return { ...validation, validatorName: 'Unknown User' };
+                                }
+                            }
+                            return validation;
+                        })
+                    );
+                    
+                    console.log('History with names:', historyWithNames);
+                    setValidationHistory(historyWithNames);
+                } catch (e) {
+                    console.error('Failed to fetch validation history:', e);
+                    console.error('Error details:', e.response?.data || e.message);
+                    setValidationHistory([]);
+                }
+            }
         } catch (err) {
             setPendingValidations([]);
             setAssignedQueue([]);
@@ -77,7 +115,7 @@ export default function ValidatorDashboard() {
         } else {
             setLoading(false);
         }
-    }, [isValidatorUser, user?.orgUserId]);
+    }, [isValidatorUser, user?.orgUserId, activeTab]);
 
     const handleApprove = async (campaignId) => {
         if (isPreviewMode) {
@@ -95,6 +133,7 @@ export default function ValidatorDashboard() {
                 comments: formData.comments ? [formData.comments] : ['Approved'],
                 issues: [],
                 requiredDocuments: '',
+                validatorOrgUserId: user?.orgUserId, // Pass actual validator ID
             });
 
             // Mark task as complete in MongoDB queue
@@ -131,6 +170,7 @@ export default function ValidatorDashboard() {
                 comments: formData.comments ? [formData.comments] : ['Rejected'],
                 issues: ['Did not meet requirements'],
                 requiredDocuments: '',
+                validatorOrgUserId: user?.orgUserId, // Pass actual validator ID
             });
 
             // Mark task as complete in MongoDB queue
@@ -273,6 +313,12 @@ export default function ValidatorDashboard() {
                                         </div>
                                     </div>
                                 )}
+                                {selectedCampaign.submissionNotes && (
+                                    <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                                        <p className="text-xs font-medium text-yellow-700 dark:text-yellow-300 mb-1">Startup's Submission Notes:</p>
+                                        <p className="text-sm text-gray-700 dark:text-gray-300">{selectedCampaign.submissionNotes}</p>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -351,53 +397,172 @@ export default function ValidatorDashboard() {
                 </div>
             )}
 
-            {/* Pending Validations */}
+            {/* Tabs */}
             <div className="card">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                    Pending Validations
-                </h2>
-
-                {loading ? (
-                    <div className="flex justify-center py-12">
-                        <Loader2 className="animate-spin text-primary-600" size={40} />
-                    </div>
-                ) : pendingValidations.length === 0 ? (
-                    <div className="text-center py-12">
-                        <Shield size={48} className="mx-auto mb-4 text-gray-300" />
-                        <p className="text-gray-500">No pending validations</p>
-                        <p className="text-sm text-gray-400 mt-2">Campaigns submitted for validation will appear here</p>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {pendingValidations.map((campaign) => (
-                            <div key={campaign.campaignId} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-gray-900 dark:text-white">
-                                            {campaign.projectName || campaign.project_name || 'Untitled'}
-                                        </h3>
-                                        <p className="text-sm text-gray-500">{campaign.campaignId}</p>
-                                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-                                            {campaign.description?.substring(0, 150)}...
-                                        </p>
-                                        <div className="flex gap-2 mt-3">
-                                            <span className="badge badge-info">{campaign.category}</span>
-                                            <span className="badge badge-info">${(campaign.goalAmount || campaign.goal_amount || 0).toLocaleString()}</span>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => setSelectedCampaign(campaign)}
-                                        className="btn btn-primary text-sm"
-                                    >
-                                        <FileText size={16} className="mr-1" />
-                                        Review
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+                <div className="flex gap-4 border-b border-gray-200 dark:border-gray-700 -mx-6 -mt-6 px-6">
+                    <button
+                        onClick={() => setActiveTab('pending')}
+                        className={`py-4 px-2 font-medium transition-colors border-b-2 ${
+                            activeTab === 'pending'
+                                ? 'border-primary-600 text-primary-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                        }`}
+                    >
+                        My Pending Validations
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('history')}
+                        className={`py-4 px-2 font-medium transition-colors border-b-2 flex items-center gap-2 ${
+                            activeTab === 'history'
+                                ? 'border-primary-600 text-primary-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                        }`}
+                    >
+                        <History size={18} />
+                        Org Validation History
+                    </button>
+                </div>
             </div>
+
+            {/* Pending Validations Tab */}
+            {activeTab === 'pending' && (
+                <div className="card">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                        Pending Validations
+                    </h2>
+
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="animate-spin text-primary-600" size={40} />
+                        </div>
+                    ) : pendingValidations.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Shield size={48} className="mx-auto mb-4 text-gray-300" />
+                            <p className="text-gray-500">No pending validations</p>
+                            <p className="text-sm text-gray-400 mt-2">Campaigns submitted for validation will appear here</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {pendingValidations.map((campaign) => (
+                                <div key={campaign.campaignId} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <h3 className="font-semibold text-gray-900 dark:text-white">
+                                                {campaign.projectName || campaign.project_name || 'Untitled'}
+                                            </h3>
+                                            <p className="text-sm text-gray-500">{campaign.campaignId}</p>
+                                            <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                                                {campaign.description?.substring(0, 150)}...
+                                            </p>
+                                            <div className="flex gap-2 mt-3">
+                                                <span className="badge badge-info">{campaign.category}</span>
+                                                <span className="badge badge-info">${(campaign.goalAmount || campaign.goal_amount || 0).toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setSelectedCampaign(campaign)}
+                                            className="btn btn-primary text-sm"
+                                        >
+                                            <FileText size={16} className="mr-1" />
+                                            Review
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Validation History Tab */}
+            {activeTab === 'history' && (
+                <div className="card">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <History className="text-primary-600" />
+                        Organization Validation History
+                    </h2>
+                    <p className="text-sm text-gray-500 mb-2">
+                        View all validations performed by any validator in your organization
+                    </p>
+                    <p className="text-xs text-gray-400 mb-6">
+                        <strong>DD (Due Diligence Score)</strong>: 0-10 rating of campaign documentation quality and business plan completeness
+                    </p>
+
+                    {loading ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="animate-spin text-primary-600" size={40} />
+                        </div>
+                    ) : validationHistory.length === 0 ? (
+                        <div className="text-center py-12">
+                            <ListChecks size={48} className="mx-auto mb-4 text-gray-300" />
+                            <p className="text-gray-500">No validation history yet</p>
+                            <p className="text-sm text-gray-400 mt-2">Completed validations will appear here</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                                <thead className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Campaign</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Validator</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Status</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Risk Level</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Scores</th>
+                                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {validationHistory.map((validation, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td className="px-4 py-4">
+                                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                                    {validation.projectName || validation.campaignId}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    Validation ID: {validation.validationId}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                                    {validation.validatorId || 'N/A'}
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    Validator User: {validation.validatorName || 'Unknown'}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <span className={`badge ${validation.status === 'APPROVED' ? 'badge-success' : validation.status === 'REJECTED' ? 'badge-danger' : 'badge-warning'}`}>
+                                                    {validation.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <span className={`badge ${
+                                                    validation.riskLevel === 'LOW' ? 'badge-success' :
+                                                    validation.riskLevel === 'MEDIUM' ? 'badge-warning' :
+                                                    'badge-danger'
+                                                }`}>
+                                                    {validation.riskLevel || 'N/A'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <div className="text-sm text-gray-900 dark:text-white" title="Due Diligence Score (0-10)">
+                                                    DD: {validation.dueDiligenceScore || 'N/A'}
+                                                </div>
+                                                <div className="text-xs text-gray-500" title="Risk Score (0-10)">
+                                                    Risk: {validation.riskScore || 'N/A'}
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 text-sm text-gray-500">
+                                                {validation.validatedAt || validation.createdAt ? new Date(validation.validatedAt || validation.createdAt).toLocaleDateString() : 'N/A'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     );
 }
