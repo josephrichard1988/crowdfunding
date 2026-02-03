@@ -3,7 +3,7 @@
 # export MICROFAB_CONFIG=$(cat MICROFAB.txt)
 # docker run --name microfab -e MICROFAB_CONFIG -p 9090:9090 ibmcom/ibp-microfab
 #
-# curl -s http://console.127-0-0-1.nip.io:9090/ak/api/v1/components | weft microfab -w ./_wallets -p ./_gateways -m ./_msp -f
+# Installing Connection Profiles: curl -s http://console.127-0-0-1.nip.io:9090/ak/api/v1/components | weft microfab -w ./_wallets -p ./_gateways -m ./_msp -f
 # Installing Binaries: curl -sSL https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh | bash -s -- binary
 # =============================================================================
 # Chaincode Deployment Script for Crowdfunding Platform v2
