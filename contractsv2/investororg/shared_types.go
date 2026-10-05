@@ -24,7 +24,11 @@ const (
 	AllOrgsCollection    = "AllOrgsShared"
 
 	// Business Logic Constants
-	MinInvestorIncome = 20000000.0 // Minimum annual income in INR (2 Crore) for SEBI accredited investor
+	MinInvestorIncome      = 20000000.0 // Minimum annual income in INR (2 Crore) for SEBI accredited investor
+	PlatformFeePercent     = 2.0      // Fee deducted from successful campaign proceeds
+	ValidatorRewardPercent = 1.0      // Share of platform fee rewarded to ValidatorOrg
+	RefundRetainPercent    = 10.0     // Platform retention on refund transactions
+	DisputeWindowDays      = 7        // Window after funding within which disputes can be raised
 )
 
 // ============================================================================

@@ -1,9 +1,9 @@
 #!/bin/bash
 #
 # export MICROFAB_CONFIG=$(cat MICROFAB.txt)
-# docker run --name microfab -e MICROFAB_CONFIG -p 9090:9090 ibmcom/ibp-microfab
+# docker run --name microfab -e MICROFAB_CONFIG -p 8080:8080 ibmcom/ibp-microfab
 #
-# curl -s http://console.127-0-0-1.nip.io:9090/ak/api/v1/components | weft microfab -w ./_wallets -p ./_gateways -m ./_msp -f
+# curl -s http://console.127-0-0-1.nip.io:8080/ak/api/v1/components | weft microfab -w ./_wallets -p ./_gateways -m ./_msp -f
 # Installing Binaries: curl -sSL https://raw.githubusercontent.com/hyperledger/fabric/main/scripts/install-fabric.sh | bash -s -- binary
 # =============================================================================
 # Chaincode Deployment Script for Crowdfunding Platform
@@ -55,41 +55,41 @@
 # =============================================================================
 #
 # PACKAGING COMMANDS:
-#   ./deploy_chaincode.sh package                    - Package all 4 chaincodes (auto-version)
-#   ./deploy_chaincode.sh package <chaincode>        - Package specific chaincode only
+#   source ./deploy_chaincode.sh package                    - Package all 4 chaincodes (auto-version)
+#   source ./deploy_chaincode.sh package <chaincode>        - Package specific chaincode only
 #                                                      (chaincode: startup|validator|investor|platform)
 #
 # INSTALLATION COMMANDS:
-#   ./deploy_chaincode.sh install <org>              - Install all chaincodes on specific org
+#   source ./deploy_chaincode.sh install <org>              - Install all chaincodes on specific org
 #                                                      (org: startup|validator|investor|platform)
-#   ./deploy_chaincode.sh install-all                - Install all chaincodes on all 4 orgs (interactive)
+#   source ./deploy_chaincode.sh install-all                - Install all chaincodes on all 4 orgs (interactive)
 #
 # DEPLOYMENT COMMANDS (Initial):
-#   ./deploy_chaincode.sh deploy <org>               - Deploy all channels for specific org
-#   ./deploy_chaincode.sh deploy <org> <channel>     - Deploy specific channel only for org
+#   source ./deploy_chaincode.sh deploy <org>               - Deploy all channels for specific org
+#   source ./deploy_chaincode.sh deploy <org> <channel>     - Deploy specific channel only for org
 #                                                      (channel: common|startup-validator|startup-investor|
 #                                                       startup-platform|investor-validator|investor-platform|
 #                                                       validator-platform)
-#   ./deploy_chaincode.sh deploy all                 - Deploy for all orgs (interactive)
+#   source ./deploy_chaincode.sh deploy all                 - Deploy for all orgs (interactive)
 #
 # UPGRADE COMMANDS:
-#   ./deploy_chaincode.sh upgrade <cc> <channel>     - Upgrade specific chaincode on specific channel
+#   source ./deploy_chaincode.sh upgrade <cc> <channel>     - Upgrade specific chaincode on specific channel
 #                                                      (cc: startup|validator|investor|platform)
 #                                                      Auto-approves from all orgs on that channel
-#   ./deploy_chaincode.sh upgrade-all                - Upgrade all chaincodes on all 7 channels
-#   ./deploy_chaincode.sh sync-upgrade <cc> <ch> <org> - Smart upgrade for specific org
+#   source ./deploy_chaincode.sh upgrade-all                - Upgrade all chaincodes on all 7 channels
+#   source ./deploy_chaincode.sh sync-upgrade <cc> <ch> <org> - Smart upgrade for specific org
 #                                                        (only if chaincode already committed)
-#   ./deploy_chaincode.sh approve-chaincode <org> <cc> <ch> - Manually approve chaincode upgrade
+#   source ./deploy_chaincode.sh approve-chaincode <org> <cc> <ch> - Manually approve chaincode upgrade
 #                                                              Use when another org upgraded and you need to approve
 #                                                              Example: After StartupOrg upgrades, ValidatorOrg approves
 #
 # QUERY & CHECK COMMANDS:
-#   ./deploy_chaincode.sh query-committed <cc> <ch>  - Query committed chaincode details
-#   ./deploy_chaincode.sh check-readiness <cc> <ch>  - Check if chaincode ready to commit
+#   source ./deploy_chaincode.sh query-committed <cc> <ch>  - Query committed chaincode details
+#   source ./deploy_chaincode.sh check-readiness <cc> <ch>  - Check if chaincode ready to commit
 #
 # UTILITY COMMANDS:
-#   ./deploy_chaincode.sh switch <org>               - Switch peer context to specific org
-#   ./deploy_chaincode.sh help                       - Show detailed usage information
+#   source ./deploy_chaincode.sh switch <org>               - Switch peer context to specific org
+#   source ./deploy_chaincode.sh help                       - Show detailed usage information
 #
 # =============================================================================
 # DEPLOYMENT FLOW - INITIAL DEPLOYMENT:
@@ -157,19 +157,19 @@
 # =============================================================================
 #
 # STEP 1: Package New Versions
-#   Command: ./deploy_chaincode.sh package
+#   Command: source ./deploy_chaincode.sh package
 #   Output:  - Auto-detects existing versions (startup_1.tgz -> startup_2.tgz)
 #            - Creates startup_2.tgz, validator_2.tgz, investor_2.tgz, platform_2.tgz
 #            - Shows new version numbers
 #
 # STEP 2: Install New Versions on All Organizations
-#   Command: ./deploy_chaincode.sh install-all
+#   Command: source ./deploy_chaincode.sh install-all
 #   Output:  - Installs new package versions on all org peers
 #            - Auto-exports new package IDs (startup_2:xyz789...)
 #            - Overwrites previous package ID environment variables
 #
 # STEP 3: Upgrade All Chaincodes (Automated)
-#   Command: ./deploy_chaincode.sh upgrade-all
+#   Command: source ./deploy_chaincode.sh upgrade-all
 #   Output:  For each channel and chaincode:
 #            - Auto-detects current sequence (e.g., Sequence 1)
 #            - Calculates next sequence (Sequence 2)
@@ -284,9 +284,9 @@
 # =============================================================================
 # Global Configuration Variables
 # =============================================================================
-ORDERER_URL="orderer-api.127-0-0-1.nip.io:9090"
-MSP_BASE_PATH="/home/kajal/crowdfunding/_msp"
-CONTRACTS_BASE_PATH="./contracts"
+ORDERER_URL="orderer-api.127-0-0-1.nip.io:8080"
+MSP_BASE_PATH="/root/crowdfunding/_msp"
+CONTRACTS_BASE_PATH="./contractsv2"
 
 # Colors for output
 RED='\033[0;31m'
@@ -338,7 +338,7 @@ setup_fabric_env() {
 switch_to_startup() {
     export CORE_PEER_LOCALMSPID=StartupOrgMSP
     export CORE_PEER_MSPCONFIGPATH=${MSP_BASE_PATH}/StartupOrg/startuporgadmin/msp
-    export CORE_PEER_ADDRESS=startuporgpeer-api.127-0-0-1.nip.io:9090
+    export CORE_PEER_ADDRESS=startuporgpeer-api.127-0-0-1.nip.io:8080
     setup_fabric_env
     log_success "Switched to StartupOrg context"
 }
@@ -347,7 +347,7 @@ switch_to_startup() {
 switch_to_validator() {
     export CORE_PEER_LOCALMSPID=ValidatorOrgMSP
     export CORE_PEER_MSPCONFIGPATH=${MSP_BASE_PATH}/ValidatorOrg/validatororgadmin/msp
-    export CORE_PEER_ADDRESS=validatororgpeer-api.127-0-0-1.nip.io:9090
+    export CORE_PEER_ADDRESS=validatororgpeer-api.127-0-0-1.nip.io:8080
     setup_fabric_env
     log_success "Switched to ValidatorOrg context"
 }
@@ -356,7 +356,7 @@ switch_to_validator() {
 switch_to_platform() {
     export CORE_PEER_LOCALMSPID=PlatformOrgMSP
     export CORE_PEER_MSPCONFIGPATH=${MSP_BASE_PATH}/PlatformOrg/platformorgadmin/msp
-    export CORE_PEER_ADDRESS=platformorgpeer-api.127-0-0-1.nip.io:9090
+    export CORE_PEER_ADDRESS=platformorgpeer-api.127-0-0-1.nip.io:8080
     setup_fabric_env
     log_success "Switched to PlatformOrg context"
 }
@@ -365,7 +365,7 @@ switch_to_platform() {
 switch_to_investor() {
     export CORE_PEER_LOCALMSPID=InvestorOrgMSP
     export CORE_PEER_MSPCONFIGPATH=${MSP_BASE_PATH}/InvestorOrg/investororgadmin/msp
-    export CORE_PEER_ADDRESS=investororgpeer-api.127-0-0-1.nip.io:9090
+    export CORE_PEER_ADDRESS=investororgpeer-api.127-0-0-1.nip.io:8080
     setup_fabric_env
     log_success "Switched to InvestorOrg context"
 }
@@ -821,25 +821,25 @@ commit_chaincode() {
     local peer_addresses=""
     case "$channel" in
         "common-channel")
-            peer_addresses="--peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 --peerAddresses validatororgpeer-api.127-0-0-1.nip.io:9090 --peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:9090"
+            peer_addresses="--peerAddresses startuporgpeer-api.127-0-0-1.nip.io:8080 --peerAddresses validatororgpeer-api.127-0-0-1.nip.io:8080 --peerAddresses investororgpeer-api.127-0-0-1.nip.io:8080 --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:8080"
             ;;
         "startup-investor-channel")
-            peer_addresses="--peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 --peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090"
+            peer_addresses="--peerAddresses startuporgpeer-api.127-0-0-1.nip.io:8080 --peerAddresses investororgpeer-api.127-0-0-1.nip.io:8080"
             ;;
         "startup-validator-channel")
-            peer_addresses="--peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 --peerAddresses validatororgpeer-api.127-0-0-1.nip.io:9090"
+            peer_addresses="--peerAddresses startuporgpeer-api.127-0-0-1.nip.io:8080 --peerAddresses validatororgpeer-api.127-0-0-1.nip.io:8080"
             ;;
         "startup-platform-channel")
-            peer_addresses="--peerAddresses startuporgpeer-api.127-0-0-1.nip.io:9090 --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:9090"
+            peer_addresses="--peerAddresses startuporgpeer-api.127-0-0-1.nip.io:8080 --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:8080"
             ;;
         "investor-validator-channel")
-            peer_addresses="--peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 --peerAddresses validatororgpeer-api.127-0-0-1.nip.io:9090"
+            peer_addresses="--peerAddresses investororgpeer-api.127-0-0-1.nip.io:8080 --peerAddresses validatororgpeer-api.127-0-0-1.nip.io:8080"
             ;;
         "investor-platform-channel")
-            peer_addresses="--peerAddresses investororgpeer-api.127-0-0-1.nip.io:9090 --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:9090"
+            peer_addresses="--peerAddresses investororgpeer-api.127-0-0-1.nip.io:8080 --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:8080"
             ;;
         "validator-platform-channel")
-            peer_addresses="--peerAddresses validatororgpeer-api.127-0-0-1.nip.io:9090 --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:9090"
+            peer_addresses="--peerAddresses validatororgpeer-api.127-0-0-1.nip.io:8080 --peerAddresses platformorgpeer-api.127-0-0-1.nip.io:8080"
             ;;
     esac
     
@@ -1529,7 +1529,7 @@ show_usage() {
     echo "  ${CYAN}approve-chaincode${NC} <org> <cc> <ch> - Manually approve chaincode upgrade for specific org"
     echo "                                   ${BLUE}Use when another org upgraded and you need to approve${NC}"
     echo "  ${CYAN}check-readiness${NC} <cc> <ch>     - Check commit readiness for chaincode"
-    echo "  ${CYAN}query-committed${NC} <cc> <ch>     - Query committed chaincode details"ific channel"
+    echo "  ${CYAN}query-committed${NC} <cc> <ch>     - Query committed chaincode on specific channel"
     echo "  ${CYAN}upgrade-all${NC}                   - Upgrade all chaincodes on all channels (comprehensive)"
     echo "  ${CYAN}sync-upgrade${NC} <cc> <ch> <org>  - Smart sync-upgrade for specific org (only if committed)"
     echo "  ${CYAN}check-readiness${NC} <cc> <ch>     - Check commit readiness for chaincode"

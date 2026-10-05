@@ -181,6 +181,76 @@ func (i *InvestorContract) InitLedger(ctx contractapi.TransactionContextInterfac
 }
 
 // ============================================================================
+// INVESTOR PROFILE MANAGEMENT
+// ============================================================================
+
+// RegisterInvestor registers a new investor with PDC for sensitive data
+// Annual income and Aadhar are private (InvestorPrivateCollection)
+// PAN number is shared (InvestorValidatorCollection)
+func (i *InvestorContract) RegisterInvestor(
+	ctx contractapi.TransactionContextInterface,
+	investorID string,
+	name string,
+	annualIncome float64,
+	aadharNumber string,
+	panNumber string,
+) error {
+
+	// Check if already exists in public state
+	existing, err := ctx.GetStub().GetState("INVESTOR_PUB_" + investorID)
+	if err != nil {
+		return fmt.Errorf("failed to read from world state: %v", err)
+	}
+	if existing != nil {
+		return fmt.Errorf("investor %s already exists", investorID)
+	}
+
+	// SEBI Accredited Investor Check
+	if annualIncome < MinInvestorIncome {
+		return fmt.Errorf("investor annual income %.2f below SEBI minimum threshold %.2f", annualIncome, MinInvestorIncome)
+	}
+
+	timestamp := time.Now().Format(time.RFC3339)
+
+	// 1. Public State: Name
+	publicProfile := InvestorProfilePublic{
+		InvestorID: investorID,
+		Name:       name,
+		CreatedAt:  timestamp,
+	}
+	pubBytes, _ := json.Marshal(publicProfile)
+	err = ctx.GetStub().PutState("INVESTOR_PUB_"+investorID, pubBytes)
+	if err != nil {
+		return fmt.Errorf("failed to store public profile: %v", err)
+	}
+
+	// 2. Private State (InvestorPrivateCollection): Annual Income & Aadhar
+	privateProfile := InvestorProfilePrivate{
+		InvestorID:   investorID,
+		AnnualIncome: annualIncome,
+		AadharNumber: aadharNumber,
+	}
+	privBytes, _ := json.Marshal(privateProfile)
+	err = ctx.GetStub().PutPrivateData(InvestorPrivateCollection, "INVESTOR_PRIV_"+investorID, privBytes)
+	if err != nil {
+		return fmt.Errorf("failed to store private profile: %v", err)
+	}
+
+	// 3. Shared State (InvestorValidatorCollection): PAN Number
+	sharedProfile := InvestorProfileShared{
+		InvestorID: investorID,
+		PANNumber:  panNumber,
+	}
+	sharedBytes, _ := json.Marshal(sharedProfile)
+	err = ctx.GetStub().PutPrivateData(InvestorValidatorCollection, "INVESTOR_SHARED_"+investorID, sharedBytes)
+	if err != nil {
+		return fmt.Errorf("failed to store shared profile: %v", err)
+	}
+
+	return nil
+}
+
+// ============================================================================
 // CAMPAIGN VIEWING - Using Public Ledger
 // ============================================================================
 
@@ -441,6 +511,10 @@ func (i *InvestorContract) MakeInvestment(
 	currency string,
 ) error {
 
+	if amount < 20000000 {
+		return fmt.Errorf("minimum investment amount is 20,000,000 (2 crore), requested: %f", amount)
+	}
+
 	timestamp := time.Now().Format(time.RFC3339)
 
 	// Check for duplicate investment ID
@@ -544,6 +618,10 @@ func (i *InvestorContract) CreateInvestmentProposal(
 		if err != nil {
 			return fmt.Errorf("failed to parse milestones: %v. Input was: %s", err, milestonesJSON)
 		}
+	}
+
+	if investmentAmount < 20000000 {
+		return fmt.Errorf("minimum investment amount is 20,000,000 (2 crore), requested: %f", investmentAmount)
 	}
 
 	timestamp := time.Now().Format(time.RFC3339)

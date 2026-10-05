@@ -39,7 +39,7 @@ export CORE_PEER_ADDRESS=platformorgpeer-api.127-0-0-1.nip.io:9090
 
 ### 1.1 INVOKE: Create Campaign
 ```bash
-peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:9090 --channelID startup-validator-channel -n startup -c '{"function":"CreateCampaign","Args":["CAMP001","STARTUP001","Technology","2025-03-31","USD","false","false","2025-01-01","Prototype","Hardware","[\"IoT\",\"SmartHome\",\"AI\"]","false","false","90","1","1","2025","50000","50K-100K","Smart Home IoT Platform","An innovative IoT platform for smart home automation with AI-powered features","[\"business_plan.pdf\",\"pitch_deck.pdf\",\"financials.xlsx\"]"]}'
+peer chaincode invoke -o orderer-api.127-0-0-1.nip.io:8080 --channelID startup-validator-channel -n startup -c '{"function":"CreateCampaign","Args":["1CAMP001","STARTUP001","Technology","2025-03-31","USD","false","false","2025-01-01","Prototype","Hardware","[\"IoT\",\"SmartHome\",\"AI\"]","false","false","90","1","1","2025","50000","50K-100K","Smart Home IoT Platform","An innovative IoT platform for smart home automation with AI-powered features","[\"business_plan.pdf\",\"pitch_deck.pdf\",\"financials.xlsx\"]"]}'
 ```
 
 ### 1.2 QUERY: Verify Campaign Created

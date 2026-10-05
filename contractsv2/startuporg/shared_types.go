@@ -24,7 +24,11 @@ const (
 	AllOrgsCollection    = "AllOrgsShared"
 
 	// Business Logic Constants
-	MinInvestorIncome = 20000000.0 // Minimum annual income in INR (2 Crore) for SEBI accredited investor
+	MinInvestorIncome      = 20000000.0 // Minimum annual income in INR (2 Crore) for SEBI accredited investor
+	PlatformFeePercent     = 2.0      // Fee deducted from successful campaign proceeds
+	ValidatorRewardPercent = 1.0      // Share of platform fee rewarded to ValidatorOrg
+	RefundRetainPercent    = 10.0     // Platform retention on refund transactions
+	DisputeWindowDays      = 7        // Window after funding within which disputes can be raised
 )
 
 // ============================================================================
@@ -153,4 +157,14 @@ type Campaign struct {
 	UpdatedAt   string `json:"updatedAt"`
 	ApprovedAt  string `json:"approvedAt"`
 	PublishedAt string `json:"publishedAt"`
+}
+
+type InvestmentAcknowledgement struct {
+	AckID          string `json:"ackId"`
+	InvestmentID   string `json:"investmentId"`
+	CampaignID     string `json:"campaignId"`
+	StartupID      string `json:"startupId"`
+	InvestorID     string `json:"investorId"`
+	Message        string `json:"message"`
+	AcknowledgedAt string `json:"acknowledgedAt"`
 }
