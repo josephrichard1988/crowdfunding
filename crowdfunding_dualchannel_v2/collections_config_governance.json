@@ -1,0 +1,62 @@
+[
+  {
+    "name": "StartupPrivateData",
+    "policy": "OR('StartupOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 1,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('StartupOrgMSP.member')"
+    }
+  },
+  {
+    "name": "ValidatorPrivateData",
+    "policy": "OR('ValidatorOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 1,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "OR('ValidatorOrgMSP.member')"
+    }
+  },
+  {
+    "name": "StartupValidatorShared",
+    "policy": "OR('StartupOrgMSP.member', 'ValidatorOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "AND('ValidatorOrgMSP.peer', 'PlatformOrgMSP.peer')"
+    }
+  },
+  {
+    "name": "StartupPlatformShared",
+    "policy": "OR('StartupOrgMSP.member', 'PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "AND('ValidatorOrgMSP.peer', 'PlatformOrgMSP.peer')"
+    }
+  },
+  {
+    "name": "ValidatorPlatformShared",
+    "policy": "OR('ValidatorOrgMSP.member', 'PlatformOrgMSP.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 2,
+    "blockToLive": 0,
+    "memberOnlyRead": true,
+    "memberOnlyWrite": true,
+    "endorsementPolicy": {
+      "signaturePolicy": "AND('ValidatorOrgMSP.peer', 'PlatformOrgMSP.peer')"
+    }
+  }
+]
